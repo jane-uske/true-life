@@ -96,6 +96,7 @@ export class Agent {
     this.wait = Math.random() * 10;
     this.pause = 0;
     this.chatCd = 0;
+    this.hold = false; // 拍戏时定在原地，不按日程走
   }
 
   goTo(sim, goal, act, inside) {
@@ -123,6 +124,7 @@ export class Agent {
   }
 
   decide(sim) {
+    if (this.hold) return;
     if (this.plan) {
       const entries = typeof this.plan === 'function' ? this.plan(sim.day) : this.plan;
       let cur = entries[0];
@@ -208,6 +210,53 @@ export class Sim {
 
   add(o) { const a = new Agent(this, o); this.agents.push(a); return a; }
 
+  agent(id) { return this.agents.find(a => a.id === id) || null; }
+
+  // 小雨、林父第一次出场时才加入小镇，之后按自己的家闲逛
+  spawnGuest(name) {
+    const existing = this.agent(name);
+    if (existing) return existing;
+    const c = CAST[name];
+    if (!c) return null;
+    return this.add({ id: name, name, color: c.color, hair: c.hair, pants: c.pants, start: c.home, home: c.home, inside: false, act: '登场' });
+  }
+
+  nearestNode(x, z) {
+    let best = null, bd = Infinity;
+    for (const n of this.nav.nodes.values()) {
+      const d = (n.x - x) ** 2 + (n.z - z) ** 2;
+      if (d < bd) { bd = d; best = n.id; }
+    }
+    return best;
+  }
+
+  // 把演员放到林楚面前，两人面对面。slot 决定站位，避免几个演员叠在一起
+  teleportNear(a, T, slot = 0) {
+    const spots = [[1.9, 0], [1.5, 1.6], [1.5, -1.6], [2.8, 0.8]];
+    const [f, r] = spots[slot % spots.length];
+    const h = T.heading;
+    a.x = T.x + Math.sin(h) * f + Math.cos(h) * r;
+    a.z = T.z + Math.cos(h) * f - Math.sin(h) * r;
+    a.y = T.y;
+    a.path = []; a.edge = null; a.walking = false; a.inside = false;
+    a.node = this.nearestNode(a.x, a.z);
+    a.goal = a.node; a.place = a.node;
+    a.wait = 6;
+    a.heading = Math.atan2(T.x - a.x, T.z - a.z);
+  }
+
+  // 读档后让有日程的角色直接站到该在的地方，不必从家里走过去
+  snapToPlans() {
+    for (const a of this.agents) {
+      if (!a.plan) continue;
+      const entries = typeof a.plan === 'function' ? a.plan(this.day) : a.plan;
+      let cur = entries[0];
+      for (const e of entries) if (this.min >= e.t) cur = e;
+      const n = this.nav.nodes.get(cur.at);
+      Object.assign(a, { x: n.x, y: n.y, z: n.z, node: cur.at, goal: cur.at, place: cur.at, path: [], edge: null, inside: !!cur.inside, act: cur.act, walking: false });
+    }
+  }
+
   emit(type, data) { this.events.push({ type, ...data }); }
 
   say(agent, text, thought = false) { this.emit('say', { agent, text, thought }); }
@@ -236,8 +285,11 @@ export class Sim {
     this.nightFF = this.speed > 0 && T.inside && (this.min >= 21 * 60 + 45 || this.min < 6 * 60 + 30);
     const sp = this.speed === 0 ? 0 : this.nightFF ? 24 : this.speed;
     const dts = dt * sp;
+    const prev = this.min;
     this.min += dts * 2;
     if (this.min >= 1440) { this.min -= 1440; this.day++; this.emit('day', { day: this.day }); }
+    if (Math.floor(prev / 60) !== Math.floor(this.min / 60)) this.emit('hour', { h: Math.floor(this.min / 60) });
+    if (periodOf(prev) !== periodOf(this.min)) this.emit('period', { name: periodOf(this.min) });
     for (const a of this.agents) { a.decide(this); a.step(this, dts); }
     if (sp > 0 && !this.nightFF) this.chatter(dt, dts);
     for (let i = this.pending.length - 1; i >= 0; i--) {

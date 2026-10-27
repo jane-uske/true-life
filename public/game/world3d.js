@@ -502,7 +502,10 @@ export class World {
     const batch = new Batch();
     buildTown(batch, this.anchors);
     batch.build(this.scene, this.mats);
-    this.people = new Map(sim.agents.map(a => [a, new Person(this, a)]));
+    this.people = new Map();
+    this.syncPeople();
+    this.markers = new Map();
+    this.camOverride = null;
     this.ring = new THREE.Mesh(new THREE.RingGeometry(0.95, 1.2, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#8fd3ff', transparent: true, opacity: 0.85, depthWrite: false }));
     this.scene.add(this.ring);
     this.buildPost();
@@ -597,6 +600,37 @@ export class World {
     u.uScale.value.set(w / (this.lw * this.px), h / (this.lh * this.px));
   }
 
+  // 新角色（小雨、林父）加入小镇时补建方块小人
+  syncPeople() {
+    for (const a of this.sim.agents) if (!this.people.has(a)) this.people.set(a, new Person(this, a));
+  }
+
+  // 待拍的戏：在地点上立一块场记板
+  addMarker(id, nodeId) {
+    const n = this.sim.nav.nodes.get(nodeId);
+    if (!n || this.markers.has(id)) return;
+    const g = new THREE.Group();
+    const mk = (geo, c, x, y, z, rz = 0) => { const m = new THREE.Mesh(geo, this.mats.get(c)); m.position.set(x, y, z); m.rotation.z = rz; m.castShadow = true; g.add(m); };
+    mk(new THREE.BoxGeometry(0.14, 1.5, 0.14), '#55627a', 0, 0.75, 0);
+    mk(new THREE.BoxGeometry(1.3, 0.85, 0.14), '#1d1d24', 0, 1.9, 0);
+    mk(new THREE.BoxGeometry(1.1, 0.08, 0.16), '#ffffff', 0, 1.75, 0);
+    for (let i = 0; i < 4; i++) mk(new THREE.BoxGeometry(0.32, 0.22, 0.16), i % 2 ? '#1d1d24' : '#ffffff', -0.48 + i * 0.32, 2.48, 0, 0.18);
+    const len = Math.hypot(n.x, n.z) || 1;
+    const off = this.sim.nav.nodes.has(nodeId) && nodeId === '广场' ? 2.4 : 1.8;
+    g.position.set(n.x - (n.x / len) * off + (n.z / len) * 1.4, n.y, n.z - (n.z / len) * off - (n.x / len) * 1.4);
+    this.scene.add(g);
+    this.markers.set(id, g);
+  }
+  removeMarker(id) {
+    const g = this.markers.get(id);
+    if (!g) return;
+    this.scene.remove(g);
+    this.markers.delete(id);
+  }
+  markerPos(id) { const g = this.markers.get(id); return g ? g.position : null; }
+
+  focusScene() { this.setFollow(true); this.view.zoomT = Math.max(this.view.zoomT, 2.8); }
+
   // ----- 镜头 -----
   rotate(step) { this.view.azT += step * 45; }
   zoomBy(f) { this.view.zoomT = clamp(this.view.zoomT * f, 0.75, 4.2); }
@@ -660,6 +694,7 @@ export class World {
       p.group.rotation.y += dh * Math.min(1, dt * 10);
       p.animate(a.walking, a.phase, now);
     }
+    for (const g of this.markers.values()) g.rotation.y = Math.sin(t * 1.2) * 0.35;
     const T = sim.truman;
     this.ring.visible = !T.inside;
     this.ring.position.set(T.x, T.y + 0.04, T.z);
@@ -723,10 +758,10 @@ export class World {
   }
 
   crtName() {
-    const a = this.crtAnchor;
-    if (!a) return '';
-    let h = 0; for (const ch of a.name) h = (h * 31 + ch.charCodeAt(0)) % 997;
-    return `CAM ${String(h % 300 + 1).padStart(3, '0')} · ${a.name}`;
+    const name = this.camOverride || (this.crtAnchor && this.crtAnchor.name);
+    if (!name) return '';
+    let h = 0; for (const ch of name) h = (h * 31 + ch.charCodeAt(0)) % 997;
+    return `CAM ${String(h % 300 + 1).padStart(3, '0')} · ${name}`;
   }
 
   // 世界坐标 → 屏幕 CSS 像素（用未吸附的相机，和补偿后的画面对齐）
