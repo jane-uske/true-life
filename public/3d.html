@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>真实人生 · 3D 样机</title>
+<link rel="stylesheet" href="fonts/Fusion-Pixel-12px-Proportional-Simplified-Chinese.css">
+<style>
+/* 全屏 3D 小镇，界面浮在上面。像素字体只用 12px 和 24px，保证每个像素都落在整数位置上。 */
+:root{
+  --bg:#0b1120;
+  --panel:#131c2f;
+  --panel-2:#1c2740;
+  --edge:#33456b;
+  --ink:#e8edf7;
+  --muted:#93a1bd;
+  --sky:#8fd3ff;
+  --tally:#ff4d4f;
+  --paper:#f3ead3;
+  --paper-ink:#2b2620;
+  --warn:#ffb648;
+  --calm:#6fd6a8;
+  --px:"Fusion Pixel 12px Proportional Simplified Chinese","PingFang SC","Microsoft YaHei",sans-serif;
+  --gut-l:max(14px,env(safe-area-inset-left,0px));
+  --gut-r:max(14px,env(safe-area-inset-right,0px));
+  --gut-t:max(14px,env(safe-area-inset-top,0px));
+  --gut-b:max(14px,env(safe-area-inset-bottom,0px));
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0;overflow:clip;background:var(--bg)}
+body{color:var(--ink);font:12px/18px var(--px);-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale}
+button,input{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--sky);outline-offset:3px}
+#game{position:relative;width:100%;height:100%;overflow:clip}
+#view{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#view:active{cursor:grabbing}
+
+/* 像素边框：四条外阴影拼出缺角的方框 */
+.px{background:var(--panel);box-shadow:3px 0 0 0 var(--edge),-3px 0 0 0 var(--edge),0 3px 0 0 var(--edge),0 -3px 0 0 var(--edge),inset 0 3px 0 0 rgba(255,255,255,.05)}
+.pbtn{appearance:none;border:0;background:var(--panel-2);color:var(--ink);padding:3px 9px;cursor:pointer;line-height:18px;box-shadow:2px 0 0 0 var(--edge),-2px 0 0 0 var(--edge),0 2px 0 0 var(--edge),0 -2px 0 0 var(--edge)}
+.pbtn:hover{background:#25335a}
+.pbtn:active{transform:translateY(1px)}
+.pbtn[aria-pressed="true"]{background:var(--sky);color:var(--bg)}
+
+/* 顶部状态条 */
+.top{position:absolute;z-index:5;top:var(--gut-t);left:var(--gut-l);right:var(--gut-r);display:flex;flex-wrap:wrap;align-items:center;gap:8px 22px;padding:8px 14px}
+.brand{display:flex;align-items:center;gap:12px;margin-right:auto}
+.logo{font-size:24px;line-height:24px;color:var(--sky)}
+.onair{background:var(--tally);color:#fff;padding:0 6px;letter-spacing:.1em;animation:pulse 1.6s steps(2,start) infinite}
+@keyframes pulse{50%{opacity:.55}}
+.brand small{color:var(--muted)}
+.back{color:var(--muted);text-decoration:none}
+.back:hover{color:var(--sky)}
+.clock{display:flex;align-items:baseline;gap:10px}
+.clock b{font-weight:400;font-size:24px;line-height:24px;font-variant-numeric:tabular-nums}
+#clock-day{font-size:12px;color:var(--muted)}
+.chip{padding:0 6px;background:var(--panel-2);color:var(--sky)}
+.chip.ff{background:var(--warn);color:#2b1d00}
+.speed{display:flex;gap:6px}
+.stats{display:flex;gap:18px}
+.stat{display:flex;flex-direction:column}
+.stat span{color:var(--muted)}
+.stat b{font-weight:400;font-size:24px;line-height:24px;display:flex;align-items:center;gap:6px}
+.stat small{font-size:12px;color:var(--muted)}
+.bar{display:inline-block;width:72px;height:6px;background:var(--panel-2);position:relative}
+.bar b{position:absolute;left:0;top:0;bottom:0;background:var(--calm);display:block}
+
+/* 右侧抽屉 */
+.drawer{position:absolute;z-index:4;right:var(--gut-r);top:calc(var(--gut-t) + 74px);width:292px;max-height:calc(100% - 74px - 230px);display:flex;transform:translateX(calc(100% + var(--gut-r) + 6px));transition:transform .25s steps(5)}
+.drawer.open{transform:none}
+.drawer-tab{position:absolute;left:-38px;top:0;width:30px;padding:8px 0;writing-mode:vertical-rl;letter-spacing:.2em}
+.drawer-body{overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:10px;width:100%}
+.drawer h2,.drawer h3{margin:0;font-weight:400}
+.drawer h2{font-size:24px;line-height:24px;color:var(--sky)}
+.drawer h3{color:var(--muted);display:flex;justify-content:space-between}
+.now{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0}
+.now dt{color:var(--muted)}
+.now dd{margin:0}
+.mind{margin:0;color:var(--paper)}
+.sched{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.sched li{display:grid;grid-template-columns:40px 1fr;gap:8px;padding:1px 4px}
+.sched li time{color:var(--muted)}
+.sched li.done{opacity:.45}
+.sched li.now{background:var(--sky);color:var(--bg)}
+.sched li.now time{color:var(--bg)}
+.debug{display:flex;flex-direction:column;gap:6px;padding-top:8px;border-top:2px dashed var(--edge)}
+.debug input[type=range]{width:100%;accent-color:var(--sky)}
+.jump{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.jump span{color:var(--muted)}
+
+/* 偷拍小窗：WebGL 直接画在 #crt-screen 的位置 */
+.crt{position:absolute;z-index:2;left:var(--gut-l);bottom:var(--gut-b);padding:22px 0;background:transparent}
+.crt-screen{width:240px;height:180px;position:relative;pointer-events:none}
+.crt-screen::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 1px,transparent 1px 3px)}
+.crt-top,.crt-bot{position:absolute;left:0;right:0;height:22px;padding:0 8px;background:#0d1322;display:flex;justify-content:space-between;align-items:center;gap:8px;white-space:nowrap;overflow:hidden}
+.crt-top{top:0;color:var(--muted)}
+.crt-bot{bottom:0}
+.rec{color:var(--tally)}
+
+/* 镜头按钮 */
+.cam{position:absolute;z-index:3;right:var(--gut-r);bottom:calc(var(--gut-b) + 24px);display:flex;gap:8px;padding:6px 8px}
+.help{position:absolute;z-index:3;right:var(--gut-r);bottom:var(--gut-b);margin:0;color:var(--muted);text-shadow:0 1px 0 #000}
+
+/* 手牌预览 */
+.hand{position:absolute;z-index:3;left:50%;bottom:0;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;pointer-events:none}
+.hand-note{background:var(--panel);padding:2px 8px;margin-bottom:10px;color:var(--muted);box-shadow:2px 0 0 0 var(--edge),-2px 0 0 0 var(--edge),0 2px 0 0 var(--edge),0 -2px 0 0 var(--edge)}
+.hand-cards{display:flex;pointer-events:auto}
+.card{width:116px;height:150px;margin:0 -8px;padding:8px 9px;background:var(--paper);color:var(--paper-ink);display:flex;flex-direction:column;gap:4px;transform:translateY(64px) rotate(var(--r));transition:transform .18s steps(4);box-shadow:0 0 0 2px #2b2620,0 4px 0 2px rgba(0,0,0,.35)}
+.card:hover{transform:translateY(0) rotate(0);z-index:2}
+.card .stamp{align-self:flex-start;padding:0 4px;box-shadow:0 0 0 1px currentColor}
+.card[data-cat="drama"] .stamp{color:#b8325c}
+.card[data-cat="calm"] .stamp{color:#1d7f55}
+.card[data-cat="block"] .stamp{color:#a35f00}
+.card b{font-weight:400;padding-bottom:3px;border-bottom:2px solid rgba(214,92,92,.5)}
+.card .d{color:#6b6358;flex:1}
+.card .cost{color:#6b6358}
+
+/* 跟着 3D 物体走的标签 */
+.labels{position:absolute;inset:0;z-index:1;pointer-events:none}
+.labels > *{position:absolute;left:0;top:0;will-change:transform;white-space:nowrap}
+.loc{pointer-events:auto;cursor:pointer;border:0;color:#fff;background:rgba(11,17,32,.72);padding:0 6px;margin:0;translate:-50% -100%;box-shadow:2px 0 0 0 rgba(255,255,255,.25),-2px 0 0 0 rgba(255,255,255,.25),0 2px 0 0 rgba(255,255,255,.25),0 -2px 0 0 rgba(255,255,255,.25)}
+.loc:hover{background:var(--sky);color:var(--bg)}
+.loc.exit{cursor:default;background:#151b28;color:var(--sky)}
+.tag{translate:-50% -100%;padding:0 5px;background:rgba(11,17,32,.78);color:#fff;border-left:6px solid var(--c)}
+.tag.star{background:var(--c);color:#141821;border:0;pointer-events:auto;cursor:pointer}
+.tag.inside{background:var(--panel);color:var(--sky);border-left:6px solid var(--sky);animation:pulse 1.6s steps(2,start) infinite}
+.bubble{translate:-50% -100%;max-width:200px;white-space:normal;background:var(--paper);color:var(--paper-ink);padding:4px 8px;box-shadow:2px 0 0 0 #2b2620,-2px 0 0 0 #2b2620,0 2px 0 0 #2b2620,0 -2px 0 0 #2b2620}
+.bubble::after{content:"";position:absolute;left:calc(50% - 4px);bottom:-8px;width:8px;height:6px;background:#2b2620}
+.bubble.thought{background:#dfe9f7}
+
+.loading{position:absolute;inset:0;z-index:10;display:grid;place-items:center;background:var(--bg);color:var(--sky);font-size:24px;line-height:24px}
+
+@media (max-width:760px){
+  .top{gap:6px 14px;padding:6px 10px}
+  .stats{gap:12px}
+  .stat b{font-size:12px;line-height:18px}
+  .brand small{display:none}
+  .drawer{width:min(280px,calc(100% - 70px));top:calc(var(--gut-t) + 110px);max-height:calc(100% - 110px - 200px)}
+  .crt{bottom:calc(var(--gut-b) + 96px);padding:20px 4px}
+  .crt-screen{width:144px;height:108px}
+  .crt-top{display:none}
+  .cam{bottom:auto;right:auto;left:var(--gut-l);top:calc(var(--gut-t) + 118px);flex-direction:column;padding:6px}
+  .cam #follow,.cam #overview{writing-mode:vertical-rl;padding:8px 3px}
+  .help,.hand-note{display:none}
+  .card{width:84px;height:116px;padding:6px;transform:translateY(58px) rotate(var(--r))}
+  .card .d{display:none}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="game">
+  <canvas id="view" aria-label="晴港镇的 3D 俯视画面，可以拖动、缩放和旋转"></canvas>
+  <div class="labels" id="labels"></div>
+
+  <header class="top px">
+    <div class="brand">
+      <span class="logo">真实人生</span>
+      <span class="onair">ON AIR</span>
+      <small id="showday">直播第 12,410 天</small>
+      <a class="back" href="./">← 可玩版</a>
+    </div>
+    <div class="clock"><b id="clock-day">第 1 天</b><b id="clock-time">06:35</b><span class="chip" id="clock-period">早上</span></div>
+    <div class="speed" role="group" aria-label="时间速度">
+      <button class="pbtn" type="button" data-speed="0" aria-pressed="false">暂停</button>
+      <button class="pbtn" type="button" data-speed="1" aria-pressed="true">1x</button>
+      <button class="pbtn" type="button" data-speed="2" aria-pressed="false">2x</button>
+      <button class="pbtn" type="button" data-speed="4" aria-pressed="false">4x</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><span>收视</span><b>820<small>万</small></b></div>
+      <div class="stat"><span>怀疑值</span><b><span id="sus-val">12</span><i class="bar" aria-hidden="true"><b id="sus-bar"></b></i></b></div>
+      <div class="stat"><span>经费</span><b>300<small>万</small></b></div>
+    </div>
+  </header>
+
+  <aside class="drawer px" id="drawer">
+    <button class="pbtn drawer-tab" id="drawer-tab" type="button" aria-expanded="false" aria-controls="drawer-body">林楚</button>
+    <div class="drawer-body" id="drawer-body">
+      <h2>林楚 · 实时</h2>
+      <dl class="now"><dt>位置</dt><dd id="t-place">家</dd><dt>正在</dt><dd id="t-act">睡觉</dd><dt>下一站</dt><dd id="t-next">—</dd></dl>
+      <h3>内心</h3>
+      <p class="mind" id="t-mind"></p>
+      <h3>今日日程</h3>
+      <ol class="sched" id="t-sched"></ol>
+      <div class="debug">
+        <h3>样机调试 <span>正式版没有</span></h3>
+        <label for="dbg-sus">怀疑值 <span id="dbg-sus-v">12</span>：拖高看穹顶裂开</label>
+        <input type="range" id="dbg-sus" min="0" max="100" value="12">
+        <div class="jump"><span>跳到</span>
+          <button class="pbtn" type="button" data-jump="390">06:30</button>
+          <button class="pbtn" type="button" data-jump="720">12:00</button>
+          <button class="pbtn" type="button" data-jump="1110">18:30</button>
+          <button class="pbtn" type="button" data-jump="1250">20:50</button>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="crt px">
+    <div class="crt-top"><span id="crt-cam">CAM</span></div>
+    <div class="crt-screen" id="crt-screen"></div>
+    <div class="crt-bot"><span class="rec">● REC</span><span id="crt-tc">06:35:00</span></div>
+  </div>
+
+  <div class="cam px">
+    <button class="pbtn" id="rot-l" type="button" title="向左转（Q）" aria-label="向左转">↺</button>
+    <button class="pbtn" id="rot-r" type="button" title="向右转（E）" aria-label="向右转">↻</button>
+    <button class="pbtn" id="zoom-out" type="button" aria-label="缩小">－</button>
+    <button class="pbtn" id="zoom-in" type="button" aria-label="放大">＋</button>
+    <button class="pbtn" id="follow" type="button" aria-pressed="true" title="跟拍林楚（F）">跟拍林楚</button>
+    <button class="pbtn" id="overview" type="button">全景</button>
+  </div>
+  <p class="help">拖动平移 · 滚轮缩放 · Q/E 旋转 · 空格暂停</p>
+
+  <div class="hand">
+    <span class="hand-note">手牌预览 · 下一步：拖到小镇里使用</span>
+    <div class="hand-cards" id="hand-cards"></div>
+  </div>
+
+  <div class="loading" id="loading">搭建摄影棚…</div>
+</div>
+<script>
+  setTimeout(function () {
+    if (!window.__booted) document.getElementById('loading').textContent = '3D 引擎没加载出来。用 npm start 启动后再打开，并确认浏览器支持 WebGL。';
+  }, 15000);
+</script>
+<script type="module" src="game/main.js"></script>
+</body>
+</html>
