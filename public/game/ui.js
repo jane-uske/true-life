@@ -403,7 +403,7 @@ export class UI {
           : !ai.ok ? '没连上 DeepSeek，先用排练剧本'
             : `DeepSeek 在线 · ${D.crew === 'default' ? ai.models.default : ai.models.quick}`;
 
-    document.querySelectorAll('[data-speed]').forEach(b => { b.disabled = director.locked; });
+    document.querySelectorAll('[data-speed]').forEach(b => { b.disabled = director.locked; b.setAttribute('aria-pressed', String(Number(b.dataset.speed) === sim.speed)); });
     const game = document.getElementById('game');
     game.classList.toggle('finale-on', D.finale && !D.ended);
     game.classList.toggle('ended-on', !!D.ended);
@@ -430,7 +430,7 @@ export class UI {
     let idx = 0;
     plan.forEach((e, k) => { if (sim.min >= e.t) idx = k; });
     const next = plan[idx + 1];
-    $('#t-next').textContent = D.finale || D.ended ? '—' : next ? `${fmtClock(next.t)} ${next.at} · ${next.act}` : '明天 06:40 起床';
+    $('#t-next').textContent = D.finale || D.ended ? '—' : D.escape ? `${T.override ? T.override.at : '大桥'}（正在出逃，不按日程走了）` : next ? `${fmtClock(next.t)} ${next.at} · ${next.act}` : '明天 06:40 起床';
     $('#t-intent').textContent = D.intent || '暂时没什么打算';
     const mind = D.minds[0];
     $('#t-mind-d').textContent = mind ? mind.d : '';

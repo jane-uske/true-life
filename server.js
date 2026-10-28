@@ -157,6 +157,6 @@ const server = http.createServer(async (req, res) => {
 
 // 只监听本机，别让局域网里的人借你的 key
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`《真实人生》已启动：3D 版 http://localhost:${PORT}/3d.html  ·  2D 版 http://localhost:${PORT}/`);
+  console.log(`《真实人生》已启动：3D 版 http://localhost:${PORT}/  ·  2D 版 http://localhost:${PORT}/2d.html`);
   console.log(KEY ? `AI：DeepSeek（快速 ${MODELS.quick} / 精细 ${MODELS.default}）` : '没有找到 DEEPSEEK_API_KEY，只能用排练模式。复制 .env.example 为 .env 并填上 key。');
 });
