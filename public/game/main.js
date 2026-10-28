@@ -39,6 +39,8 @@ const locTags = Object.entries(LOCS).map(([name, L]) => {
 const exitTag = el('span', 'loc exit', '出口');
 layer.append(exitTag);
 const exitNode = sim.nav.nodes.get('出口');
+const accTag = el('span', 'loc acc', '');
+layer.append(accTag);
 
 const nameTags = new Map();
 function tagFor(a) {
@@ -83,6 +85,8 @@ function updateLabels(dt) {
     labels.loc[t.name] = { x: p.x, y: p.y, hidden };
   }
   place(exitTag, world.project(exitNode.x, exitNode.y + 5.4, exitNode.z));
+  const acc = world.accidentLabel();
+  if (acc) { if (accTag.textContent !== acc.text) accTag.textContent = acc.text; place(accTag, world.project(acc.x, acc.y, acc.z)); } else accTag.hidden = true;
   for (const a of sim.agents) {
     const t = tagFor(a);
     if (!t) continue;

@@ -522,6 +522,7 @@ export class UI {
           n.append(w, body);
         } else n = el('div', 'l-act', L.who && L.who !== '旁白' ? `${L.who}${L.act}` : L.act);
       } else if (L.k === 'note') n = el('div', 'l-note', `场务备注：${L.text}`);
+      else if (L.k === 'acc') n = el('div', 'l-acc', L.text);
       else if (L.k === 'diary') { n = el('div', 'l-diary'); n.append(el('span', 'slate', `日记 · 第${L.day}天`), el('p', '', L.text)); }
       else if (L.k === 'res') n = el('div', 'l-res', L.text);
       else n = el('div', 'l-sys', L.text);

@@ -60,7 +60,7 @@ const QUAD_VS = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(pos
 const DOME_VS = `varying vec3 vDir; void main(){ vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.); }`;
 const DOME_FS = `
 uniform vec3 uTop, uHor, uSunDir, uSunCol;
-uniform float uSus, uTime, uNight;
+uniform float uSus, uTime, uNight, uSunOn;
 varying vec3 vDir;
 float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float noise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f*f*(3.-2.*f);
@@ -80,8 +80,10 @@ void main(){
   col += step(.996, hash(floor(vec2(az * 90., el * 90.)))) * uNight * .8;
   // 太阳灯
   float sd = dot(d, uSunDir);
-  col += uSunCol * smoothstep(.986, .993, sd) * (1. - uNight);
-  col += uSunCol * pow(max(sd, 0.), 30.) * .3 * (1. - uNight);
+  col += uSunCol * smoothstep(.986, .993, sd) * (1. - uNight) * uSunOn;
+  col += uSunCol * pow(max(sd, 0.), 30.) * .3 * (1. - uNight) * uSunOn;
+  // 太阳灯熄灭时，灯座露出来：一圈灰色的金属环
+  col = mix(col, vec3(.32, .34, .4), smoothstep(.986, .993, sd) * (1. - uSunOn) * (1. - uNight));
   // 面板网格：怀疑值越高，接缝越明显，坏掉的面板越多
   vec2 g = vec2((az + 3.14159) / 6.28318 * 48., t * 12.);
   vec2 cell = floor(g);
@@ -528,7 +530,7 @@ export class World {
     const toon = (c) => this.mats.get(c);
     this.domeU = {
       uTop: { value: new THREE.Color() }, uHor: { value: new THREE.Color() }, uSunDir: { value: new V3() }, uSunCol: { value: new THREE.Color() },
-      uSus: { value: 0 }, uTime: { value: 0 }, uNight: { value: 0 },
+      uSus: { value: 0 }, uTime: { value: 0 }, uNight: { value: 0 }, uSunOn: { value: 1 },
     };
     // 只画穹顶的内壁：从外面看，靠近镜头的半边自动被“剖开”
     this.dome = new THREE.Mesh(new THREE.SphereGeometry(DOME_R, 96, 32, 0, Math.PI * 2, 0, Math.PI / 2),
@@ -661,6 +663,119 @@ export class World {
 
   focusScene() { this.setFollow(true); this.view.zoomT = Math.max(this.view.zoomT, 2.8); }
 
+  // ---------- 突发舞台事故 ----------
+  // 每种事故一组临时模型，演完就拆掉。返回太阳灯的亮度（0 = 熄灭）
+  startAccident(id, site) {
+    this.endAccident();
+    const T = this.sim.truman;
+    const g = new THREE.Group();
+    const own = []; // 这次新建的几何体和材质，拆的时候释放
+    const geo = (G) => { own.push(G); return G; };
+    const basic = (c, o = {}) => { const m = new THREE.MeshBasicMaterial({ color: c, ...o }); own.push(m); return m; };
+    const box = (w, h, d, mat, x, y, z, parent = g) => { const m = new THREE.Mesh(geo(new THREE.BoxGeometry(w, h, d)), typeof mat === 'string' ? this.mats.get(mat) : mat); m.position.set(x, y, z); m.castShadow = true; parent.add(m); return m; };
+    const A = { id, g, own, t0: performance.now() / 1000, life: { light: 10, rain: 12, radio: 9, door: 9, sun: 2.2, stroller: 0 }[id] || 0, parts: {} };
+    const near = Math.hypot(site.x - T.x, site.z - T.z) < 3;
+    if (id === 'rain') {
+      for (const [x, z, w] of [[0, 0, 2.6], [-1.2, 0.4, 1.6], [1.1, -0.3, 1.8]]) box(w, 0.9, w * 0.8, '#7d8696', x, 0, z);
+      const dropMat = basic('#5f93d6');
+      A.parts.drops = [];
+      for (let i = 0; i < 28; i++) {
+        const d = box(0.09, 0.6, 0.09, dropMat, (Math.random() - 0.5) * 2.8, 0, (Math.random() - 0.5) * 2.2);
+        d.castShadow = false;
+        A.parts.drops.push({ m: d, ph: Math.random() });
+      }
+      g.position.set(T.x, T.y + 6.5, T.z);
+    } else if (id === 'light') {
+      // 一盏舞台灯，侧面用小方块拼出“7”
+      const body = new THREE.Group();
+      box(1.4, 1.0, 1.0, '#3b3542', 0, 0, 0, body);
+      const lens = new THREE.Mesh(geo(new THREE.CylinderGeometry(0.42, 0.42, 0.2, 10).rotateX(Math.PI / 2)), basic('#ffe9a8'));
+      lens.position.set(0, 0, 0.56); body.add(lens);
+      box(0.12, 0.7, 0.12, '#55627a', 0, 0.75, 0, body);
+      const white = basic('#ffffff');
+      for (const [cx, cy] of [[0, 0], [1, 0], [2, 0], [2, 1], [1, 2], [1, 3], [1, 4]]) box(0.04, 0.12, 0.12, white, 0.72, 0.3 - cy * 0.13, -0.15 + cx * 0.13, body);
+      g.add(body);
+      const off = near ? polar(this.sim.min * 7, 2.2) : { x: 0, z: 0 };
+      A.parts = { body, land: new V3(site.x + off.x, site.y, site.z + off.z), sparks: [] };
+      for (let i = 0; i < 8; i++) { const sp = box(0.12, 0.12, 0.12, white, 0, -99, 0); sp.castShadow = false; A.parts.sparks.push({ m: sp, a: i * 0.785 }); }
+    } else if (id === 'radio') {
+      box(0.5, 0.34, 0.2, '#3b3542', 0, 0, 0);
+      box(0.04, 0.4, 0.04, '#cfd8e3', 0.18, 0.36, 0);
+      A.parts.rings = [0, 1, 2].map(() => { const m = new THREE.Mesh(geo(new THREE.TorusGeometry(1, 0.05, 4, 24)), basic('#ffffff', { transparent: true, depthWrite: false })); g.add(m); return m; });
+    } else if (id === 'door') {
+      // 一面伪装成树篱的布景墙，门没关好，里面是亮着灯的化妆间和一桌盒饭
+      const p = near ? { x: T.x + Math.cos(T.heading) * 4, z: T.z - Math.sin(T.heading) * 4 } : { x: site.x + 3, z: site.z + 3 };
+      g.position.set(p.x, site.y, p.z);
+      g.rotation.y = Math.atan2(T.x - p.x, T.z - p.z);
+      const hedge = '#6fae78';
+      box(1.0, 3.2, 0.5, hedge, -1.3, 1.6, 0); box(1.0, 3.2, 0.5, hedge, 1.3, 1.6, 0); box(1.6, 0.6, 0.5, hedge, 0, 2.9, 0);
+      box(1.6, 2.6, 1.2, basic('#ffe7a8'), 0, 1.3, -0.85);
+      box(0.5, 0.6, 0.06, '#3b3542', -0.35, 1.0, -0.2); box(0.38, 0.38, 0.06, '#3b3542', -0.35, 1.55, -0.2);
+      box(0.9, 0.08, 0.06, '#8a6b4a', 0.25, 0.85, -0.2);
+      box(0.24, 0.14, 0.07, basic('#ffffff'), 0.1, 0.96, -0.18); box(0.24, 0.14, 0.07, basic('#ffffff'), 0.42, 0.96, -0.18);
+      const hinge = new THREE.Group(); hinge.position.set(-0.8, 0, 0.2); g.add(hinge);
+      box(1.6, 2.6, 0.12, '#5f9a68', 0.8, 1.3, 0, hinge);
+      A.parts.hinge = hinge;
+    }
+    this.scene.add(g);
+    this.acc = A;
+  }
+
+  endAccident() {
+    const A = this.acc;
+    if (!A) return;
+    this.scene.remove(A.g);
+    for (const o of A.own) o.dispose();
+    this.acc = null;
+  }
+
+  updateAccident(dt, now) {
+    const A = this.acc;
+    if (!A) return 1;
+    const e = now - A.t0, T = this.sim.truman, P = A.parts;
+    if (e > A.life) { this.endAccident(); return 1; }
+    if (A.id === 'rain') {
+      const k = Math.min(1, dt * 4);
+      A.g.position.x += (T.x - A.g.position.x) * k;
+      A.g.position.z += (T.z - A.g.position.z) * k;
+      A.g.position.y = T.y + 6.5;
+      for (const d of P.drops) d.m.position.y = -0.6 - ((d.ph + e * 1.6) % 1) * 5.6;
+    } else if (A.id === 'light') {
+      const y = Math.max(P.land.y + 0.5, P.land.y + 34 - 24 * e * e);
+      const landed = y <= P.land.y + 0.5;
+      P.body.position.set(P.land.x, y, P.land.z);
+      if (!landed) { P.body.rotation.set(e * 5, 0, e * 3); A.landT = null; }
+      else {
+        if (A.landT == null) { A.landT = e; P.body.rotation.set(0.35, 0.6, 1.2); }
+        const se = e - A.landT;
+        for (const s of P.sparks) {
+          const r = 0.6 + se * 4;
+          s.m.position.set(P.land.x + Math.cos(s.a) * r, P.land.y + 0.3 + Math.max(0, se * 3 - se * se * 6), P.land.z + Math.sin(s.a) * r);
+          s.m.visible = se < 0.6;
+        }
+      }
+      A.label = { text: '7 号灯', x: P.body.position.x, y: P.body.position.y + 1.6, z: P.body.position.z };
+    } else if (A.id === 'radio') {
+      A.g.position.set(T.x + Math.cos(T.heading) * 0.75, T.y + 1.25, T.z - Math.sin(T.heading) * 0.75);
+      P.rings.forEach((m, i) => {
+        const f = (e * 0.8 + i / 3) % 1;
+        m.scale.setScalar(0.3 + f * 2.4);
+        m.material.opacity = 1 - f;
+        m.lookAt(this.cam.position);
+      });
+      A.label = { text: '“目标正在向东移动……”', x: A.g.position.x, y: A.g.position.y + 2.2, z: A.g.position.z };
+    } else if (A.id === 'door') {
+      const open = e < 0.4 ? e / 0.4 : e > A.life - 0.5 ? (A.life - e) / 0.5 : 1;
+      P.hinge.rotation.y = -1.4 * open;
+      A.label = { text: '后台', x: A.g.position.x, y: A.g.position.y + 4.2, z: A.g.position.z };
+    } else if (A.id === 'sun') {
+      return (e < 0.15 || (e > 0.35 && e < 0.5) || (e > 0.8 && e < 1.3)) ? 0 : 1;
+    }
+    return 1;
+  }
+
+  accidentLabel() { return this.acc && this.acc.label || null; }
+
   // ----- 镜头 -----
   rotate(step) { this.view.azT += step * 45; }
   zoomBy(f) { this.view.zoomT = clamp(this.view.zoomT * f, 0.75, 4.2); }
@@ -704,7 +819,9 @@ export class World {
 
     this.hemi.color.copy(k.sky); this.hemi.groundColor.copy(k.gnd); this.hemi.intensity = k.hemiI;
     const L = sd.y > 0.06 ? sd : MOON;
-    this.sun.color.copy(k.sun); this.sun.intensity = k.sunI;
+    const sunOn = this.updateAccident(dt, t);
+    U.uSunOn.value = sunOn;
+    this.sun.color.copy(k.sun); this.sun.intensity = k.sunI * (0.25 + 0.75 * sunOn);
     this.sun.position.copy(L).multiplyScalar(150); this.sun.target.position.set(0, 0, 0);
 
     const blink = Math.floor(t * 1.5) % 2;

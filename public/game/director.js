@@ -1,5 +1,5 @@
 // 导演层：收视、经费、手牌、待拍的戏、拍摄流程和结算。规则大多沿用 v0.1 的 applyEnd / advance。
-import { CARD, DECK, CAST, LOCS, SPONSOR_PAY, sponsorOf, trumanPlan, ENDINGS, SEASON_DAYS, LOW_RATING } from './data.js';
+import { CARD, DECK, CAST, LOCS, SPONSOR_PAY, sponsorOf, trumanPlan, ENDINGS, SEASON_DAYS, LOW_RATING, ACCIDENTS, ACC, ACCIDENT_RATE, DANMU } from './data.js';
 import { fmtClock, clamp, pick } from './engine.js';
 import { buildPrompt, callAI, offlineScene, offlineEnd, offlineMind, ERR, PERMANENT_WHY, ai, aiReady, clean, buildDiaryPrompt, sanitizeStops, offlineDiary, buildFinalePrompt, offlineFinale } from './story.js';
 
@@ -21,7 +21,7 @@ function fresh(crew = 'quick') {
     flags: { yu: false, dad: false }, used: [], pendingEscape: false, take: 0, crew,
     extraStops: {}, diaries: [], diaryDay: 0,
     escape: null, escapeRest: 0, finale: false, ended: null,
-    lowHours: 0, seasonSum: 0, seasonN: 0,
+    lowHours: 0, seasonSum: 0, seasonN: 0, accident: null,
     log: [
       { k: 'day', text: '第 1 天' },
       { k: 'sys', text: '把手牌拖到小镇的地点上，林楚走到那里就会开拍；拖到林楚身上，马上开拍。' },
@@ -184,7 +184,7 @@ export class Director {
     sim.speed = 0;
 
     const place = p.target === '林楚' ? this.placeOf(T) : p.target;
-    const ctx = { card, actor: p.actor, whisper: p.whisper, sponsor: p.sponsor ? sponsorOf(p.day) : null, escapeBefore: D.pendingEscape, place, onTruman: p.target === '林楚' };
+    const ctx = { card, actor: p.actor, whisper: p.whisper, sponsor: p.sponsor ? sponsorOf(p.day) : null, escapeBefore: D.pendingEscape, place, onTruman: p.target === '林楚', accident: this.recentAccident() };
     const S = { day: sim.day, clock: fmtClock(sim.min), sus: sim.sus, intent: D.intent, clues: D.clues, memos: D.memos, activity: T.act };
 
     // 布景：林楚走出来面朝广场，演员站到他面前
@@ -207,6 +207,7 @@ export class Director {
 
     const before = D.log.length;
     this.pushLog({ k: 'take', n: D.take + 1, day: sim.day, time: S.clock, place, title: card.t });
+    if (ctx.accident) this.pushLog({ k: 'dir', text: `${ctx.accident.ago} 分钟前出了事故（${ctx.accident.short}），演员得圆场` });
     const mode = this.mode();
     this.hooks.shooting(true, { n: D.take + 1, place, title: card.t });
     this.hooks.caption(mode === 'offline' ? '排练组正在走位……' : '导演组正在写这场戏……');
@@ -503,6 +504,47 @@ export class Director {
     this.endGame(stay ? 'stay' : 'leave', last);
   }
 
+  // ---------- 突发舞台事故 ----------
+  // 林楚在户外才会出事。事故可能就在他身边，也可能在镇上别处；他离得近才会起疑、记下破绽
+  accident(id) {
+    const sim = this.sim, T = sim.truman, D = this.D, a = ACC[id];
+    if (!a || this.busy || D.finale || D.ended || T.inside || T.gone) return false;
+    let site = { x: T.x, y: T.y, z: T.z };
+    if (!a.near && Math.random() < 0.4) {
+      const n = sim.nav.nodes.get(pick(Object.keys(LOCS).filter(k => k !== '大桥')));
+      site = { x: n.x, y: n.y, z: n.z };
+    }
+    const near = Math.hypot(site.x - T.x, site.z - T.z) < 10;
+    this.world.startAccident(id, site);
+    if (id === 'stroller') sim.strollerPass(3);
+    D.accident = { id, abs: sim.abs, near };
+    D.ratings = Math.min(1250, D.ratings + 40);
+    const clock = fmtClock(sim.min);
+    if (near) {
+      const s0 = sim.sus;
+      sim.sus = clamp(s0 + 4 + Math.floor(Math.random() * 5), 0, 100);
+      D.clues.push({ d: `${sim.day}·${clock}`, t: a.short });
+      if (id !== 'rain') T.pause = Math.max(T.pause, 2.5);
+      sim.pending.push({ t: id === 'stroller' ? 9 : 1.6, agent: T, text: a.react, thought: true });
+      this.pushLog({ k: 'acc', text: `${clock} 舞台事故：${a.t}。林楚看见了，怀疑 ${s0} → ${sim.sus}。` });
+    } else {
+      this.pushLog({ k: 'acc', text: `${clock} 舞台事故：${a.t}。还好林楚不在附近，没看见。` });
+    }
+    this.hooks.toast(`舞台事故！${a.short}。${near ? '林楚看见了。接下来一小时里拍的戏，演员都得圆场。' : '林楚没看见。'}`, true);
+    this.hooks.danmu([pick(['前方事故！', '笑死，穿帮了', '导演组在干嘛', '这也能播？']), pick(DANMU)]);
+    this.save();
+    this.hooks.changed();
+    return true;
+  }
+
+  // 60 个游戏分钟内的事故要写进这场戏的提示词
+  recentAccident() {
+    const A = this.D.accident;
+    if (!A || !ACC[A.id]) return null;
+    const ago = Math.round(this.sim.abs - A.abs);
+    return ago <= 60 ? { ...ACC[A.id], ago: Math.max(1, ago), near: A.near } : null;
+  }
+
   // ---------- 结局 ----------
   seasonAvg() {
     const D = this.D;
@@ -587,6 +629,7 @@ export class Director {
       D.seasonN++;
       D.lowHours = D.ratings < LOW_RATING ? D.lowHours + 1 : 0;
       if (D.lowHours >= 3) { this.endGame('cancel'); return; }
+      if (!this.busy && Math.random() < ACCIDENT_RATE) this.accident(pick(ACCIDENTS).id);
       if (D.lowHours) this.hooks.toast(`收视低于 ${LOW_RATING} 万，已经连续 ${D.lowHours} 小时。连续 3 小时就会停播。`, true);
       this.save();
     } else if (ev.type === 'period' && ['早上', '下午', '晚上'].includes(ev.name)) {
