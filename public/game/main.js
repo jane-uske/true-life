@@ -181,7 +181,7 @@ function frame(now) {
     if (ev.type === 'say') { if (!director.busy) addBubble(ev.agent, ev.text, ev.thought); }
     else director.onClock(ev);
   }
-  director.checkTriggers();
+  director.tick();
   world.update(dt, now);
   world.render(crtRect());
   updateLabels(dt);

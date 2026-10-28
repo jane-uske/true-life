@@ -1,7 +1,7 @@
 // 导演层：收视、经费、手牌、待拍的戏、拍摄流程和结算。规则大多沿用 v0.1 的 applyEnd / advance。
 import { CARD, DECK, CAST, LOCS, SPONSOR_PAY, sponsorOf, trumanPlan } from './data.js';
 import { fmtClock, clamp, pick } from './engine.js';
-import { buildPrompt, callAI, offlineScene, offlineEnd, offlineMind, ERR, PERMANENT_WHY, ai, aiReady, clean } from './story.js';
+import { buildPrompt, callAI, offlineScene, offlineEnd, offlineMind, ERR, PERMANENT_WHY, ai, aiReady, clean, buildDiaryPrompt, sanitizeStops, offlineDiary } from './story.js';
 
 const SAVE_KEY = 'truelife.3d.v2';
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -18,6 +18,7 @@ function fresh(crew = 'quick') {
     minds: [{ d: '第 1 天 · 06:35', text: '又是晴天。晴港好像从来没下过一场像样的雨。有时候我觉得，整个镇子都在等我出门。' }],
     intent: '下班后去报刊亭，看看新到的旅行杂志',
     flags: { yu: false, dad: false }, used: [], pendingEscape: false, take: 0, crew,
+    extraStops: {}, diaries: [], diaryDay: 0,
     log: [
       { k: 'day', text: '第 1 天' },
       { k: 'sys', text: '把手牌拖到小镇的地点上，林楚走到那里就会开拍；拖到林楚身上，马上开拍。' },
@@ -39,6 +40,7 @@ export class Director {
     this.D = this.load() || fresh();
     const D = this.D;
     sim.day = D.day; sim.min = D.min; sim.sus = D.sus;
+    sim.extraStops = D.extraStops;
     if (D.flags.yu) sim.spawnGuest('小雨');
     if (D.flags.dad) sim.spawnGuest('林父');
     sim.snapToPlans();
@@ -50,7 +52,8 @@ export class Director {
   load() {
     try {
       const s = JSON.parse(localStorage.getItem(SAVE_KEY));
-      if (s && s.v === 2 && Array.isArray(s.hand) && Array.isArray(s.log)) return s;
+      // M2 的存档没有日记、出逃、结局这些字段，用新档的默认值补上
+      if (s && s.v === 2 && Array.isArray(s.hand) && Array.isArray(s.log)) return Object.assign(fresh(s.crew), s);
     } catch { /* 存储不可用或内容损坏 */ }
     return null;
   }
@@ -90,7 +93,7 @@ export class Director {
     if (target === '林楚') return { now: true, text: '马上开拍' };
     if (T.place === target && !T.path.length) return { now: true, text: '他就在这儿，马上开拍' };
     if (T.goal === target) return { text: '他正在过去' };
-    const e = trumanPlan(this.sim.day).find(x => x.t > this.sim.min && x.at === target);
+    const e = this.sim.planFor(this.sim.day).find(x => x.t > this.sim.min && x.at === target);
     return e ? { text: `预计 ${fmtClock(e.t)} 后` } : { never: true, text: '他今天不会来这里' };
   }
 
@@ -125,6 +128,18 @@ export class Director {
     this.pushLog({ k: 'dir', text: `撤回「${c.t}」，经费已退回` });
     this.save();
     this.hooks.changed();
+  }
+
+  // 每帧调用一次：拍戏触发、写日记
+  tick() {
+    this.checkTriggers();
+    this.checkDiary();
+  }
+
+  snapshot() {
+    const sim = this.sim, D = this.D;
+    const tag = `第${sim.day}天`;
+    return { day: sim.day, clock: fmtClock(sim.min), sus: sim.sus, intent: D.intent, clues: D.clues, memos: D.memos, activity: sim.truman.act, today: D.memos.filter(m => m.startsWith(tag)), escape: D.pendingEscape };
   }
 
   checkTriggers() {
@@ -307,6 +322,60 @@ export class Director {
     if (sim.sus >= 100) this.pushLog({ k: 'sys', text: '林楚已经确信这个世界是假的。（结局会在下一版加入）' });
     const dm = Array.isArray(e.danmu) ? e.danmu.map(x => clean(x, 24)).filter(Boolean).slice(0, 6) : [];
     this.hooks.danmu(dm);
+  }
+
+  // ---------- 每晚日记 ----------
+  // 23:00 以后林楚在家时写一次。写完之前，时间最多走到第二天 06:00
+  checkDiary() {
+    const sim = this.sim, T = sim.truman, D = this.D;
+    if (this.diaryBusy || this.busy || D.diaryDay >= sim.day || sim.min < 23 * 60) return;
+    if (T.place !== '家' || !T.inside || T.path.length) return;
+    this.writeDiary();
+  }
+
+  async writeDiary() {
+    const sim = this.sim, D = this.D, day = sim.day;
+    this.diaryBusy = true;
+    sim.gate = (day + 1) * 1440 + 6 * 60;
+    this.hooks.changed();
+    const S = this.snapshot();
+    const got = { diary: null, plan: null };
+    const onObj = (o) => {
+      if (!o || typeof o !== 'object') return;
+      if (o.k === 'diary' && !got.diary) got.diary = o;
+      else if (o.k === 'plan' && !got.plan) got.plan = o;
+    };
+    await aiReady;
+    if (this.mode() !== 'offline') {
+      try {
+        await callAI(buildDiaryPrompt(S, trumanPlan(day + 1)), 'quick', AbortSignal.timeout(45000), onObj);
+      } catch (e) {
+        const code = (e && e.code) || 'upstream_error';
+        if (PERMANENT_WHY[code]) ai.blocked = PERMANENT_WHY[code];
+        this.pushLog({ k: 'sys', text: `${PERMANENT_WHY[code] || 'DeepSeek 没交日记'}，这篇由排练组代写。` });
+      }
+    }
+    const fb = offlineDiary(S);
+    const text = clean(got.diary && got.diary.text, 90) || fb.diary.text;
+    const plan = got.plan || fb.plan;
+    const stops = sanitizeStops(plan.stops);
+    const escape = plan.escape === true || plan.escape === 'true' || sim.sus >= 85;
+
+    for (const k of Object.keys(D.extraStops)) if (Number(k) <= day) delete D.extraStops[k];
+    D.extraStops[day + 1] = stops;
+    D.diaryDay = day;
+    const intent = clean(plan.intent, 30);
+    if (intent) D.intent = intent;
+    D.pendingEscape = escape;
+    D.diaries.unshift({ day, text });
+    D.diaries.length = Math.min(D.diaries.length, 7);
+    this.pushLog({ k: 'diary', day, text });
+    const what = stops.map(x => `${fmtClock(x.t)} ${x.at} · ${x.act}`).join('；');
+    this.pushLog({ k: 'sys', text: `林楚给明天加了安排：${what || '没有，照常过'}${escape ? '。他决定离开晴港。' : '。'}` });
+    sim.gate = null;
+    this.diaryBusy = false;
+    this.save();
+    this.hooks.changed();
   }
 
   // ---------- 时间推进 ----------

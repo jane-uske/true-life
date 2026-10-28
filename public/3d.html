@@ -108,6 +108,11 @@ button,input,select{font:inherit;color:inherit}
 .sched li.done{opacity:.45}
 .sched li.now{background:var(--sky);color:var(--bg)}
 .sched li.now time{color:var(--bg)}
+.sched li.extra:not(.now){color:var(--warn)}
+.diary{margin:0;padding:6px 8px;background:var(--paper);color:var(--paper-ink)}
+.l-diary{display:flex;flex-direction:column;gap:3px;margin-top:6px}
+.l-diary .slate{align-self:flex-start;background:var(--paper);color:var(--paper-ink)}
+.l-diary p{margin:0;color:var(--paper)}
 .debug{display:flex;flex-direction:column;gap:6px;padding-top:8px;border-top:2px dashed var(--edge)}
 .debug input[type=range]{width:100%;accent-color:var(--sky)}
 .jump{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
@@ -290,6 +295,8 @@ button,input,select{font:inherit;color:inherit}
         <dl class="now"><dt>位置</dt><dd id="t-place">家</dd><dt>正在</dt><dd id="t-act">睡觉</dd><dt>下一站</dt><dd id="t-next">—</dd><dt>打算</dt><dd id="t-intent">—</dd></dl>
         <h3>内心 <span id="t-mind-d"></span></h3>
         <p class="mind" id="t-mind"></p>
+        <h3>日记 <span id="t-diary-d"></span></h3>
+        <p class="diary" id="t-diary"></p>
         <h3>今日日程</h3>
         <ol class="sched" id="t-sched"></ol>
         <div class="debug">

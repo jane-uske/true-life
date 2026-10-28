@@ -1,6 +1,6 @@
 // 导演的操作界面：手牌拖放 / 点选、放置小窗、待拍名牌、右侧抽屉（林楚 / 场记 / 破绽）、
 // 顶部数值、拍摄提示条、弹幕和提示。3D 名牌和对话气泡在 main.js 里，这里通过 labels 读它们的位置。
-import { CARD, CAT, CAST, ROSTER, SPONSOR_PAY, sponsorOf, MINDS, trumanPlan } from './data.js';
+import { CARD, CAT, CAST, ROSTER, SPONSOR_PAY, sponsorOf, MINDS } from './data.js';
 import { fmtClock, periodOf } from './engine.js';
 import { ai, level } from './story.js';
 
@@ -361,8 +361,8 @@ export class UI {
     $('#clock-day').textContent = `第 ${sim.day} 天`;
     $('#clock-time').textContent = fmtClock(sim.min);
     const per = $('#clock-period');
-    per.textContent = director.busy ? '拍摄中' : sim.nightFF ? '夜间快进' : sim.speed === 0 ? '暂停' : periodOf(sim.min);
-    per.classList.toggle('ff', sim.nightFF);
+    per.textContent = director.busy ? '拍摄中' : sim.gated || director.diaryBusy ? '写日记' : sim.nightFF ? '夜间快进' : sim.speed === 0 ? '暂停' : periodOf(sim.min);
+    per.classList.toggle('ff', sim.nightFF || !!director.diaryBusy);
     $('#showday').textContent = `直播第 ${(12409 + sim.day).toLocaleString('zh-CN')} 天`;
 
     $('#rate').textContent = D.ratings.toLocaleString('zh-CN');
@@ -396,7 +396,7 @@ export class UI {
     // 林楚面板
     $('#t-place').textContent = T.path.length ? '路上' : /^h\d/.test(T.place) ? '别人家' : T.place;
     $('#t-act').textContent = director.busy ? '拍戏中' : T.act || '—';
-    const plan = trumanPlan(sim.day);
+    const plan = sim.planFor(sim.day);
     let idx = 0;
     plan.forEach((e, k) => { if (sim.min >= e.t) idx = k; });
     const next = plan[idx + 1];
@@ -405,7 +405,10 @@ export class UI {
     const mind = D.minds[0];
     $('#t-mind-d').textContent = mind ? mind.d : '';
     $('#t-mind').textContent = `「${mind ? mind.text : MINDS[level(s)][0]}」`;
-    const schedKey = `${sim.day}:${idx}`;
+    const diary = D.diaries[0];
+    $('#t-diary-d').textContent = diary ? `第 ${diary.day} 天` : '';
+    $('#t-diary').textContent = director.diaryBusy ? '（他正在写……）' : diary ? diary.text : '还没写。每晚 23:00 他回家后会写一篇。';
+    const schedKey = `${sim.day}:${idx}:${plan.length}`;
     if (schedKey !== this.schedKey) {
       this.schedKey = schedKey;
       const ol = $('#t-sched');
@@ -413,7 +416,8 @@ export class UI {
       plan.forEach((e, i) => {
         if (i === 0) return;
         const li = el('li', i === idx ? 'now' : i < idx ? 'done' : '');
-        li.append(el('time', '', fmtClock(e.t)), el('span', '', `${e.at} · ${e.act}`));
+        if (e.extra) li.classList.add('extra');
+        li.append(el('time', '', fmtClock(e.t)), el('span', '', `${e.at} · ${e.act}${e.extra ? '（日记）' : ''}`));
         ol.append(li);
       });
     }
@@ -455,6 +459,7 @@ export class UI {
           n.append(w, body);
         } else n = el('div', 'l-act', L.who && L.who !== '旁白' ? `${L.who}${L.act}` : L.act);
       } else if (L.k === 'note') n = el('div', 'l-note', `场务备注：${L.text}`);
+      else if (L.k === 'diary') { n = el('div', 'l-diary'); n.append(el('span', 'slate', `日记 · 第${L.day}天`), el('p', '', L.text)); }
       else if (L.k === 'res') n = el('div', 'l-res', L.text);
       else n = el('div', 'l-sys', L.text);
       box.append(n);
