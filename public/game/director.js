@@ -461,7 +461,8 @@ export class Director {
         this.busy = false;
         this.hooks.caption('');
         this.hooks.shooting(false);
-        this.hooks.toast(ERR[code] || ERR.upstream_error, true);
+        const why = (ERR[code] || ERR.upstream_error).split(/[，。！]/)[0];
+        this.hooks.toast(`${why}，这一幕不算，再对他说一次吧。`, true);
         this.hooks.changed();
         return;
       }
@@ -587,6 +588,7 @@ export class Director {
     if (this.mode() !== 'offline') {
       try {
         await callAI(buildDiaryPrompt(S, trumanPlan(day + 1)), 'quick', AbortSignal.timeout(45000), onObj);
+        if (!got.diary || !got.plan) this.pushLog({ k: 'sys', text: 'DeepSeek 交的日记格式不对，缺的部分由排练组补上。' });
       } catch (e) {
         const code = (e && e.code) || 'upstream_error';
         if (PERMANENT_WHY[code]) ai.blocked = PERMANENT_WHY[code];
