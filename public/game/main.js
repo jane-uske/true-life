@@ -89,7 +89,11 @@ function updateLabels(dt) {
     if (a.inside) { t.hidden = true; if (a === sim.truman) labels.truman = null; continue; }
     const p = world.project(a.x, a.y + 2.75, a.z);
     const hidden = place(t, p);
-    if (a === sim.truman) labels.truman = { x: p.x, y: p.y, hidden };
+    if (a === sim.truman) {
+      labels.truman = { x: p.x, y: p.y, hidden };
+      const run = !!director.D.escape;
+      if (t.classList.contains('run') !== run) { t.classList.toggle('run', run); t.textContent = run ? '林楚 · 正在逃离' : '林楚'; }
+    }
   }
   const T = sim.truman;
   if (T.inside) {

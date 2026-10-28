@@ -168,7 +168,7 @@ export async function offlineScene(ctx, onObj, sus) {
     const a = ctx.accident, who = A === '群演' ? '旁白' : A;
     beats.push({ k: 'beat', who: '林楚', say: a.react, act: '' }, { k: 'beat', who, say: who === '旁白' ? '' : a.cover, act: who === '旁白' ? `群演们装作什么都没发生：${a.cover}` : '他飞快地接了一句，眼睛却不敢看林楚' });
   }
-  if (ctx.escapeBefore) beats.push(c.cat === 'block' ? { k: 'beat', who: '旁白', say: '', act: '林楚本想去大桥，却被拦了下来' } : { k: 'beat', who: '旁白', say: '', act: '林楚趁乱朝大桥走去，离出口更近了' });
+  if (ctx.escapeBefore) beats.push(c.cat === 'block' ? { k: 'beat', who: '旁白', say: '', act: '林楚本想离开晴港，却被拦了下来' } : { k: 'beat', who: '旁白', say: '', act: '林楚趁乱朝大桥走去，离出口更近了' });
   for (const b of beats) { onObj(b); await wait(60); }
   onObj({ k: 'mind', text: offlineMind(sus) });
   onObj(Object.assign({ k: 'end' }, offlineEnd(ctx, sus)));

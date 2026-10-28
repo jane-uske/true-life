@@ -390,8 +390,11 @@ export class UI {
     $('#skip').hidden = !director.busy || director.inFlight;
 
     const esc = $('#alert-esc');
-    esc.hidden = !D.pendingEscape;
-    if (D.pendingEscape) esc.textContent = `警报：林楚打算离开晴港（${D.intent}）。下一场不出阻拦卡，怀疑值额外 +15。`;
+    const run = !!D.escape;
+    esc.hidden = !D.pendingEscape && !run;
+    esc.classList.toggle('run', run);
+    if (run) esc.textContent = `林楚正在逃离！他${T.override && T.override.at === '出口' ? '已经过了大桥，正走向出口' : T.override && T.override.at === '码头' ? '正去码头找船' : '正朝大桥跑去'}。往大桥或码头放阻拦卡拦住他。`;
+    else if (D.pendingEscape) esc.textContent = `警报：林楚打算离开晴港（${D.intent}）。日程一有空档他就会动身；下一场不出阻拦卡，怀疑值额外 +15。`;
 
     // 林楚面板
     $('#t-place').textContent = T.path.length ? '路上' : /^h\d/.test(T.place) ? '别人家' : T.place;

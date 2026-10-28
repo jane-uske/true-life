@@ -8,6 +8,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 const int = v => { const n = Math.round(Number(v)); return Number.isFinite(n) ? n : 0; };
 const sgn = n => (n > 0 ? '+' : '') + n;
 const noop = () => {};
+const ESCAPE_SPEED = 4.4;
 
 function fresh(crew = 'quick') {
   return {
@@ -19,6 +20,7 @@ function fresh(crew = 'quick') {
     intent: '下班后去报刊亭，看看新到的旅行杂志',
     flags: { yu: false, dad: false }, used: [], pendingEscape: false, take: 0, crew,
     extraStops: {}, diaries: [], diaryDay: 0,
+    escape: null, escapeRest: 0, finale: false, ended: null,
     log: [
       { k: 'day', text: '第 1 天' },
       { k: 'sys', text: '把手牌拖到小镇的地点上，林楚走到那里就会开拍；拖到林楚身上，马上开拍。' },
@@ -44,6 +46,7 @@ export class Director {
     if (D.flags.yu) sim.spawnGuest('小雨');
     if (D.flags.dad) sim.spawnGuest('林父');
     sim.snapToPlans();
+    if (D.escape) sim.truman.speed = ESCAPE_SPEED;
     world.syncPeople();
     for (const p of D.pending) if (p.target !== '林楚') world.addMarker(p.id, p.target);
   }
@@ -93,6 +96,7 @@ export class Director {
     if (target === '林楚') return { now: true, text: '马上开拍' };
     if (T.place === target && !T.path.length) return { now: true, text: '他就在这儿，马上开拍' };
     if (T.goal === target) return { text: '他正在过去' };
+    if (this.D.escape && target === '码头' && !this.D.escape.bridge) return { text: '他在逃，放阻拦卡他会改道来这里' };
     const e = this.sim.planFor(this.sim.day).find(x => x.t > this.sim.min && x.at === target);
     return e ? { text: `预计 ${fmtClock(e.t)} 后` } : { never: true, text: '他今天不会来这里' };
   }
@@ -134,6 +138,7 @@ export class Director {
   tick() {
     this.checkTriggers();
     this.checkDiary();
+    this.checkEscape();
   }
 
   snapshot() {
@@ -319,9 +324,75 @@ export class Director {
     const note = clean(e.actor_note, 70);
     if (note) this.pushLog({ k: 'note', text: note });
     this.pushLog({ k: 'res', text: `怀疑 ${s0} → ${sim.sus}（${sgn(delta)}${esc ? '，没拦住他 +15' : ''}） · 收视 ${r.toLocaleString('zh-CN')} 万${tired ? '（同类戏连播，观众腻了）' : ''}` });
-    if (sim.sus >= 100) this.pushLog({ k: 'sys', text: '林楚已经确信这个世界是假的。（结局会在下一版加入）' });
+    // 阻拦戏拦住了他：正在逃就送回家；还没动身的，这几个小时也先不走
+    if (ctx.escapeBefore && ctx.card.cat === 'block') {
+      D.escapeRest = sim.abs + 240;
+      if (D.escape) this.stopEscape();
+    }
     const dm = Array.isArray(e.danmu) ? e.danmu.map(x => clean(x, 24)).filter(Boolean).slice(0, 6) : [];
     this.hooks.danmu(dm);
+  }
+
+  // ---------- 实时出逃 ----------
+  blockAt(place) { return this.D.pending.some(p => p.target === place && CARD[p.card].cat === 'block'); }
+
+  // 他想走（escape 为真或怀疑值 ≥85）时，在日程空档动身：大桥 → 出口。
+  // 码头上有阻拦卡、大桥上没有时，他会先绕去码头找船，被拦就照常开拍。
+  checkEscape() {
+    const sim = this.sim, T = sim.truman, D = this.D;
+    if (this.busy || D.finale || D.ended) return;
+    if (!D.escape) {
+      if (T.override && sim.abs >= T.override.until) T.override = null;
+      if (!D.pendingEscape || T.override || sim.abs < D.escapeRest) return;
+      if (sim.min < 7 * 60 || sim.min >= 21 * 60) return;
+      const { entries, index } = sim.currentPlan();
+      if (entries[index].inside) return;
+      this.startEscape();
+    }
+    const E = D.escape, here = T.path.length ? null : T.place;
+    if (here === '出口') { this.enterFinale(); return; }
+    if (here === '大桥') E.bridge = true;
+    if (here === '码头') E.dock = true;
+    const via = !E.bridge && !E.dock && this.blockAt('码头') && !this.blockAt('大桥') ? '码头' : null;
+    const at = E.bridge ? '出口' : via || '大桥';
+    const act = at === '出口' ? '走向出口' : at === '码头' ? '去码头找船' : '朝大桥跑去';
+    if (!T.override || T.override.at !== at) T.override = { at, act, until: Infinity };
+  }
+
+  startEscape() {
+    const sim = this.sim, T = sim.truman, D = this.D;
+    D.escape = { since: sim.abs, dock: false, bridge: false };
+    T.speed = ESCAPE_SPEED;
+    T.pause = 0;
+    this.hooks.say(T, '（就是现在。）', 3, true);
+    this.pushLog({ k: 'sys', text: `${fmtClock(sim.min)} 林楚丢下手里的事，朝大桥走去。他要离开晴港。` });
+    let extra = '';
+    if (!D.hand.some(id => CARD[id].cat === 'block')) { const id = this.deal(); if (id) extra = `导演组紧急调来「${CARD[id].t}」。`; }
+    this.hooks.toast(`林楚正在逃离！往大桥或码头放阻拦卡拦住他。${extra}`, true);
+    this.save();
+    this.hooks.changed();
+  }
+
+  stopEscape() {
+    const sim = this.sim, T = sim.truman, D = this.D;
+    D.escape = null;
+    T.speed = 3.6;
+    T.override = { at: '家', act: '被劝回家', until: sim.abs + 150 };
+    this.pushLog({ k: 'sys', text: '拦住了。林楚垂头丧气地往家走。' });
+  }
+
+  enterFinale() {
+    const sim = this.sim, T = sim.truman, D = this.D;
+    D.escape = null;
+    D.finale = true;
+    T.speed = 3.6;
+    T.override = { at: '出口', act: '站在门前', until: Infinity };
+    T.hold = true;
+    T.heading = Math.atan2(Math.cos(225 * Math.PI / 180), Math.sin(225 * Math.PI / 180));
+    sim.speed = 0;
+    this.pushLog({ k: 'sys', text: '林楚走到了大桥的尽头。天空原来是一面墙，墙上有一扇门。' });
+    this.save();
+    this.hooks.changed();
   }
 
   // ---------- 每晚日记 ----------

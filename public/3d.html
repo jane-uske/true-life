@@ -79,6 +79,7 @@ button,input,select{font:inherit;color:inherit}
 
 /* 警报、拍摄提示条、提示 */
 .alert{position:absolute;z-index:5;left:var(--gut-l);top:calc(var(--gut-t) + var(--top-h) + 6px);max-width:min(520px,calc(100% - 340px));padding:4px 10px;background:#3a1620;color:#ffd7d8;box-shadow:2px 0 0 0 var(--tally),-2px 0 0 0 var(--tally),0 2px 0 0 var(--tally),0 -2px 0 0 var(--tally)}
+.alert.run{background:var(--tally);color:#fff;animation:pulse 1s steps(2,start) infinite}
 .shoot{position:absolute;z-index:6;left:50%;transform:translateX(-50%);top:calc(var(--gut-t) + var(--top-h) + 8px);width:min(560px,calc(100% - 2 * var(--gut-l)));padding:8px 12px;display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center}
 .shoot .rec{color:var(--tally)}
 #shoot-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -179,6 +180,7 @@ button,input,select{font:inherit;color:inherit}
 .tag{translate:-50% -100%;padding:0 5px;background:rgba(11,17,32,.78);color:#fff;border-left:6px solid var(--c)}
 .tag.star{background:var(--c);color:#141821;border:0;pointer-events:auto;cursor:pointer}
 .tag.star.ok{box-shadow:0 0 0 2px var(--sky);animation:pulse 1s steps(2,start) infinite}
+.tag.star.run{background:var(--tally);color:#fff}
 .tag.inside{background:var(--panel);color:var(--sky);border-left:6px solid var(--sky);animation:pulse 1.6s steps(2,start) infinite}
 .bubble{translate:-50% -100%;max-width:220px;white-space:normal;background:var(--paper);color:var(--paper-ink);padding:4px 8px;z-index:1;box-shadow:2px 0 0 0 #2b2620,-2px 0 0 0 #2b2620,0 2px 0 0 #2b2620,0 -2px 0 0 #2b2620}
 .bubble::after{content:"";position:absolute;left:calc(50% - 4px);bottom:-8px;width:8px;height:6px;background:#2b2620}
