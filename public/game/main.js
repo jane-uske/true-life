@@ -39,6 +39,8 @@ const locTags = Object.entries(LOCS).map(([name, L]) => {
 const exitTag = el('span', 'loc exit', '出口');
 layer.append(exitTag);
 const exitNode = sim.nav.nodes.get('出口');
+const accTag = el('span', 'loc acc', '');
+layer.append(accTag);
 
 const nameTags = new Map();
 function tagFor(a) {
@@ -83,13 +85,19 @@ function updateLabels(dt) {
     labels.loc[t.name] = { x: p.x, y: p.y, hidden };
   }
   place(exitTag, world.project(exitNode.x, exitNode.y + 5.4, exitNode.z));
+  const acc = world.accidentLabel();
+  if (acc) { if (accTag.textContent !== acc.text) accTag.textContent = acc.text; place(accTag, world.project(acc.x, acc.y, acc.z)); } else accTag.hidden = true;
   for (const a of sim.agents) {
     const t = tagFor(a);
     if (!t) continue;
-    if (a.inside) { t.hidden = true; if (a === sim.truman) labels.truman = null; continue; }
+    if (a.inside || a.gone) { t.hidden = true; if (a === sim.truman) labels.truman = null; continue; }
     const p = world.project(a.x, a.y + 2.75, a.z);
     const hidden = place(t, p);
-    if (a === sim.truman) labels.truman = { x: p.x, y: p.y, hidden };
+    if (a === sim.truman) {
+      labels.truman = { x: p.x, y: p.y, hidden };
+      const run = !!director.D.escape;
+      if (t.classList.contains('run') !== run) { t.classList.toggle('run', run); t.textContent = run ? '林楚 · 正在逃离' : '林楚'; }
+    }
   }
   const T = sim.truman;
   if (T.inside) {
@@ -101,7 +109,7 @@ function updateLabels(dt) {
   for (let i = bubbles.length - 1; i >= 0; i--) {
     const b = bubbles[i];
     b.life -= dt;
-    if (b.life <= 0 || b.agent.inside) { b.node.remove(); bubbles.splice(i, 1); continue; }
+    if (b.life <= 0 || b.agent.inside || b.agent.gone) { b.node.remove(); bubbles.splice(i, 1); continue; }
     place(b.node, world.project(b.agent.x, b.agent.y + 2.75, b.agent.z), -26);
   }
 }
@@ -155,8 +163,8 @@ addEventListener('keydown', (e) => {
   if (e.key === 'q' || e.key === 'Q') world.rotate(-1);
   else if (e.key === 'e' || e.key === 'E') world.rotate(1);
   else if (e.key === 'f' || e.key === 'F') { world.setFollow(true); syncCamButtons(); }
-  else if (e.key === ' ' && !director.busy && !ui.popOpen) { e.preventDefault(); ui.setSpeed(sim.speed === 0 ? 1 : 0); }
-  else if (['1', '2', '3'].includes(e.key) && !director.busy && !ui.popOpen) ui.setSpeed([1, 2, 4][Number(e.key) - 1]);
+  else if (e.key === ' ' && !director.locked && !ui.popOpen) { e.preventDefault(); ui.setSpeed(sim.speed === 0 ? 1 : 0); }
+  else if (['1', '2', '3'].includes(e.key) && !director.locked && !ui.popOpen) ui.setSpeed([1, 2, 4][Number(e.key) - 1]);
 });
 new ResizeObserver(() => world.resize()).observe(canvas);
 
@@ -181,7 +189,7 @@ function frame(now) {
     if (ev.type === 'say') { if (!director.busy) addBubble(ev.agent, ev.text, ev.thought); }
     else director.onClock(ev);
   }
-  director.checkTriggers();
+  director.tick();
   world.update(dt, now);
   world.render(crtRect());
   updateLabels(dt);

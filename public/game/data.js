@@ -48,9 +48,11 @@ export const ROSTER = ['苏梅', '老周', '林母', '小雨', '孙伯', '林父
 
 export const EXTRA_COLORS = ['#9fb7d9', '#e3c37a', '#c7a7d8', '#9fd1c5', '#e8a3a3', '#a8c98a', '#f0c9a0', '#8fb4c9', '#d6b3e0', '#b9d48f'];
 
-export function trumanPlan(day) {
+// extra：前一晚日记里定下的额外行程 [{ t, at, act }]。每站占 STOP_MIN 分钟（含路上），
+// 这段时间里原日程让路，结束后回到那时本该在的地方
+export function trumanPlan(day, extra) {
   const eve = day % 2 === 1 ? '小酒馆' : '海滩';
-  return [
+  const base = [
     { t: 0, at: '家', act: '睡觉', inside: true },
     { t: 6 * 60 + 40, at: '家', act: '起床洗漱', inside: true },
     { t: 7 * 60 + 20, at: '报刊亭', act: '买报纸，翻旅行杂志' },
@@ -62,7 +64,20 @@ export function trumanPlan(day) {
     { t: 20 * 60 + 10, at: '码头', act: '看海（他怕水，却总忍不住来）' },
     { t: 21 * 60, at: '家', act: '准备睡觉', inside: true },
   ];
+  if (!extra || !extra.length) return base;
+  const busy = (t) => extra.some(s => t > s.t && t < s.t + STOP_MIN);
+  const out = base.filter(e => !busy(e.t));
+  for (const s of extra) {
+    out.push({ t: s.t, at: s.at, act: s.act, extra: true });
+    const back = s.t + STOP_MIN;
+    if (busy(back) || back >= 21 * 60) continue;
+    let cur = base[0];
+    for (const e of base) if (back >= e.t) cur = e;
+    out.push({ ...cur, t: back });
+  }
+  return out.sort((a, b) => a.t - b.t);
 }
+export const STOP_MIN = 90;
 
 export const CAST_PLANS = {
   苏梅: [
@@ -133,6 +148,28 @@ export const DECK = [
 ];
 export const CARD = Object.fromEntries(DECK.map(c => [c.id, c]));
 
+// ---------- 突发舞台事故（林楚在户外时，每个游戏小时约 6% 的概率） ----------
+// near：只会发生在林楚身边；否则可能发生在镇上别处，他不一定看见。cover 是演员圆场的台词
+export const ACCIDENTS = [
+  { id: 'light', t: '一盏聚光灯从天上掉下来，摔在地上，灯上贴着"7号灯"的标签', short: '天上掉下一盏 7 号灯', react: '这……是从天上掉下来的？', cover: '飞机上掉下来的零件，常有的事。' },
+  { id: 'rain', t: '人工降雨故障：雨只下在林楚头顶一小块，他走到哪雨跟到哪', short: '雨只下在他头上', react: '为什么只有我头上在下雨？', cover: '海边的阵雨就是这样，一会儿就停。', near: true },
+  { id: 'radio', t: '林楚的收音机串台，传出导演组的对讲："目标正在向东移动……"', short: '收音机串台', react: '收音机里说的"目标"……是我？', cover: '出租车电台串台了，别管它。', near: true },
+  { id: 'stroller', t: '同一个群演推着同一辆婴儿车，在他面前来回经过了三次', short: '同一辆婴儿车经过三次', react: '这辆婴儿车，我刚刚见了三次。', cover: '这一片的妈妈都爱推一样的车。', near: true },
+  { id: 'door', t: '一扇布景门没关好，门后是化妆间和一桌盒饭', short: '布景门后露出化妆间', react: '那扇门后面……是盒饭？', cover: '那是剧团在排练，镇上新开的。' },
+  { id: 'sun', t: '天上的"太阳"闪了两下，熄灭了半秒', short: '太阳闪了一下', react: '太阳……刚刚是不是眨了一下？', cover: '变压器老化了，电力公司说今晚就修。', near: true },
+];
+export const ACC = Object.fromEntries(ACCIDENTS.map(a => [a.id, a]));
+export const ACCIDENT_RATE = 0.06;
+
+export const ENDINGS = {
+  leave: { title: '他推开了那扇门' },
+  stay: { title: '他留了下来' },
+  cancel: { title: '节目停播了' },
+  season: { title: '第一季播完了' },
+};
+export const SEASON_DAYS = 7;
+export const LOW_RATING = 600;
+
 export const SPONSOR_PAY = 40;
 export const SPONSORS = [
   { n: '晴天速溶咖啡', s: '晴天咖啡，一口唤醒好心情！' },
@@ -158,7 +195,14 @@ export const INTENTS = [
   ['走一条从没走过的路', '偷偷研究镇上的地图', '试试能不能买到出镇的车票'],
   ['开车冲过大桥', '偷一条船，开到海的尽头', '离开晴港'],
 ];
-export const DANMU = ['第一次看直播，楚哥好帅', '这广告也太硬了哈哈哈', '苏梅姐演技退步了', '小雨我的女神！！', '他是不是发现了？？', '导演你在干嘛', '楚哥早上好！', '鲨鱼？？认真的吗', '比我上班还无聊', '前方高能', '老周永远的神', '晴晴好可爱', '救命这台词', '我赌他明天去码头', '楚门……啊不，林楚', '孙伯又加戏了', '求求别让他走', '让他走吧！自由！', '有点心疼他', '收视冲啊', '妈妈的演技好假'];
+// 排练模式写日记时，用打算推出明天想去的地点
+export const INTENT_AT = {
+  下班后去报刊亭看看旅行杂志: ['报刊亭', '翻新到的旅行杂志'], 周末带苏梅去海边散步: ['海滩', '先去海边踩踩点'], '攒钱，以后去一次云屿群岛': ['码头', '问问去云屿的船'],
+  留意街上那些人的路线: ['广场', '坐着数路过的人'], 找老周聊聊最近的怪事: ['小酒馆', '找老周聊聊'], 打听小雨现在在哪: ['报刊亭', '跟孙伯打听小雨'],
+  走一条从没走过的路: ['海滩', '绕远路走一趟'], 偷偷研究镇上的地图: ['报刊亭', '买一张镇上的地图'], 试试能不能买到出镇的车票: ['报刊亭', '问出镇的车票'],
+  开车冲过大桥: ['大桥', '看看桥那头'], '偷一条船，开到海的尽头': ['码头', '看哪条船没上锁'], 离开晴港: ['大桥', '走到桥的尽头'],
+};
+export const DANMU = ['第一次看直播，楚哥好帅', '这广告也太硬了哈哈哈', '苏梅姐演技退步了', '小雨我的女神！！', '他是不是发现了？？', '导演你在干嘛', '楚哥早上好！', '鲨鱼？？认真的吗', '比我上班还无聊', '前方高能', '老周永远的神', '晴晴好可爱', '救命这台词', '我赌他明天去码头', '楚门……啊不，林楚', '孙伯又加戏了', '这雨是在跟拍吗', '门后面是盒饭笑死', '求求别让他走', '让他走吧！自由！', '有点心疼他', '收视冲啊', '妈妈的演技好假'];
 
 export const GREET = {
   早上: ['早啊，林楚！', '早上好！', '今天天气真好！', '又是个大晴天！'],

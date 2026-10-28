@@ -41,6 +41,7 @@ export function buildNav() {
   add('D1', 275, 40); link('D1', 'R275'); add('D2', 275, 45, PIER_Y); link('D2', 'D1'); add('码头', 275, 53, PIER_Y); link('码头', 'D2');
   add('G1', 225, 39); link('G1', 'R225'); add('G2', 225, 43.5, BRIDGE_Y); link('G2', 'G1');
   add('大桥', 225, 51, BRIDGE_Y); link('大桥', 'G2'); add('出口', 225, 67.5, BRIDGE_Y); link('出口', '大桥');
+  add('门外', 225, 72, BRIDGE_Y); link('门外', '出口');
 
   function route(from, to) {
     if (from === to) return [];
@@ -97,6 +98,9 @@ export class Agent {
     this.pause = 0;
     this.chatCd = 0;
     this.hold = false; // 拍戏时定在原地，不按日程走
+    this.override = null; // { at, act }：导演层临时指定的目的地（出逃、被拦回家），优先于日程
+    this.track = null; // 不走路网的直线来回（婴儿车群演反复经过林楚）
+    this.gone = false; // 推门离开了穹顶
   }
 
   goTo(sim, goal, act, inside) {
@@ -124,7 +128,8 @@ export class Agent {
   }
 
   decide(sim) {
-    if (this.hold) return;
+    if (this.hold || this.track || this.gone) return;
+    if (this.override) { this.goTo(sim, this.override.at, this.override.act, false); return; }
     if (this.plan) {
       const entries = typeof this.plan === 'function' ? this.plan(sim.day) : this.plan;
       let cur = entries[0];
@@ -142,6 +147,7 @@ export class Agent {
 
   step(sim, dts) {
     this.chatCd = Math.max(0, this.chatCd - dts);
+    if (this.track) { this.stepTrack(sim, dts); return; }
     if (this.pause > 0) { this.pause -= dts; this.walking = false; return; }
     if (!this.path.length) {
       this.walking = false;
@@ -170,6 +176,29 @@ export class Agent {
     this.walking = true;
     this.phase += Math.min(dts, 0.25) * 8;
   }
+
+  // 从林楚一侧走到另一侧，算一次经过；端点跟着林楚当前位置走
+  stepTrack(sim, dts) {
+    const k = this.track, T = sim.truman;
+    const tx = T.x + k.px * k.side * 6 + k.fx * 1.4, tz = T.z + k.pz * k.side * 6 + k.fz * 1.4;
+    const dx = tx - this.x, dz = tz - this.z, d = Math.hypot(dx, dz), s = this.speed * dts;
+    this.y = T.y;
+    if (d <= s) {
+      this.x = tx; this.z = tz;
+      if (--k.left <= 0) {
+        this.track = null;
+        this.path = []; this.edge = null; this.goal = null; this.walking = false;
+        this.node = sim.nearestNode(this.x, this.z); this.place = this.node; this.wait = 4;
+        return;
+      }
+      k.side = -k.side;
+      return;
+    }
+    this.x += dx / d * s; this.z += dz / d * s;
+    this.heading = Math.atan2(dx, dz);
+    this.walking = true;
+    this.phase += Math.min(dts, 0.25) * 8;
+  }
 }
 
 function labelOf(id) {
@@ -195,7 +224,10 @@ export class Sim {
     this.agents = [];
 
     const T = CAST.林楚;
-    this.truman = this.add({ id: '林楚', name: '林楚', color: T.color, hair: T.hair, pants: T.pants, plan: trumanPlan, start: '家', inside: true, act: '睡觉', speed: 3.6 });
+    this.extraStops = {}; // 日记定下的额外行程，按天存：{ [day]: [{ t, at, act }] }
+    this.gate = null; // 绝对分钟（day * 1440 + min）：时间走到这里就停住，等日记写完
+    this.gated = false;
+    this.truman = this.add({ id: '林楚', name: '林楚', color: T.color, hair: T.hair, pants: T.pants, plan: day => this.planFor(day), start: '家', inside: true, act: '睡觉', speed: 3.6 });
     const homes = { 苏梅: '家', 老周: 'h6', 孙伯: 'h1', 林母: 'h3' };
     for (const name of Object.keys(CAST_PLANS)) {
       const c = CAST[name];
@@ -209,6 +241,21 @@ export class Sim {
   }
 
   add(o) { const a = new Agent(this, o); this.agents.push(a); return a; }
+
+  planFor(day) { return trumanPlan(day, this.extraStops[day]); }
+  get abs() { return this.day * 1440 + this.min; }
+
+  // 婴儿车群演从林楚面前来回经过 n 次
+  strollerPass(n = 3) {
+    const a = this.agents.find(x => x.prop === 'stroller');
+    const T = this.truman;
+    if (!a) return null;
+    const fx = Math.sin(T.heading), fz = Math.cos(T.heading);
+    a.track = { px: fz, pz: -fx, fx, fz, side: 1, left: n };
+    a.inside = false; a.path = []; a.edge = null; a.pause = 0;
+    a.x = T.x - fz * 6 + fx * 1.4; a.z = T.z + fx * 6 + fz * 1.4; a.y = T.y;
+    return a;
+  }
 
   agent(id) { return this.agents.find(a => a.id === id) || null; }
 
@@ -248,7 +295,7 @@ export class Sim {
   // 读档后让有日程的角色直接站到该在的地方，不必从家里走过去
   snapToPlans() {
     for (const a of this.agents) {
-      if (!a.plan) continue;
+      if (!a.plan || a.override) continue;
       const entries = typeof a.plan === 'function' ? a.plan(this.day) : a.plan;
       let cur = entries[0];
       for (const e of entries) if (this.min >= e.t) cur = e;
@@ -262,7 +309,7 @@ export class Sim {
   say(agent, text, thought = false) { this.emit('say', { agent, text, thought }); }
 
   currentPlan() {
-    const entries = trumanPlan(this.day);
+    const entries = this.planFor(this.day);
     let i = 0;
     entries.forEach((e, k) => { if (this.min >= e.t) i = k; });
     return { entries, index: i };
@@ -286,7 +333,10 @@ export class Sim {
     const sp = this.speed === 0 ? 0 : this.nightFF ? 24 : this.speed;
     const dts = dt * sp;
     const prev = this.min;
-    this.min += dts * 2;
+    let next = this.min + dts * 2;
+    this.gated = false;
+    if (this.gate != null && this.day * 1440 + next >= this.gate) { next = Math.max(this.min, this.gate - this.day * 1440 - 0.01); this.gated = true; }
+    this.min = next;
     if (this.min >= 1440) { this.min -= 1440; this.day++; this.emit('day', { day: this.day }); }
     if (Math.floor(prev / 60) !== Math.floor(this.min / 60)) this.emit('hour', { h: Math.floor(this.min / 60) });
     if (periodOf(prev) !== periodOf(this.min)) this.emit('period', { name: periodOf(this.min) });

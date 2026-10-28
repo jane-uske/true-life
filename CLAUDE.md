@@ -6,28 +6,32 @@ AI 版《模拟人生》+《楚门的世界》。玩家是一档 24 小时直播
 
 - Node 18+，**没有依赖，没有构建步骤**。
 - `cp .env.example .env`，填 `DEEPSEEK_API_KEY`，然后 `npm start`。
-- 3D 版：`http://localhost:5173/3d.html`；2D 版：`http://localhost:5173/`。
+- 3D 版（首页）：`http://localhost:5173/`；2D 版：`http://localhost:5173/2d.html`。`/3d.html` 只是跳转页。
 - 没有 key 也能跑：页面会自动退回“排练模式”（预写剧本）。
 
 ## 架构
 
 - `server.js`：静态文件服务，并把 `POST /api/chat`（`{prompt, tier}`）以流式纯文本转发给 DeepSeek。`tier` 为 `quick` 时用 `deepseek-chat`，为 `default` 时用 `deepseek-reasoner`。只监听 127.0.0.1，key 不会到浏览器。`GET /api/status` 返回 AI 是否可用。
-- `public/3d.html` + `public/game/`（3D 版，纯 ES 模块）：
-  - `data.js`：地图（`LOCS`、`FILLERS`）、日程（`trumanPlan`、`CAST_PLANS`）、卡组 `DECK`（`where` 字段决定能放在哪；`'林楚'` 表示可以直接放在他身上）、角色、文案池。
+- `public/index.html` + `public/game/`（3D 版，纯 ES 模块）：
+  - `data.js`：地图（`LOCS`、`FILLERS`）、日程（`trumanPlan(day, extra)` 会把日记加的行程合并进去、`CAST_PLANS`）、事故 `ACCIDENTS`、结局 `ENDINGS`、卡组 `DECK`（`where` 字段决定能放在哪；`'林楚'` 表示可以直接放在他身上）、角色、文案池。
   - `engine.js`：
     - `Sim`：游戏时钟，1 倍速时现实 1 秒等于游戏 2 分钟；林楚在家睡觉时自动夜间快进。会发出 `hour` / `period` / `day` 事件。
     - 路网 `buildNav().route()`。
-    - `Agent`：按日程或随机闲逛；`hold = true` 时拍戏定住，不按日程走。
+    - `Agent`：按日程或随机闲逛；`hold = true` 时拍戏定住，不按日程走。`override = { at, act, until }` 临时指定目的地（出逃、被拦回家），优先于日程；`track` 是不走路网的直线来回（婴儿车）；`gone` 表示推门离开了穹顶。
+    - `sim.planFor(day)` = `trumanPlan(day, sim.extraStops[day])`，林楚的日程一律从这里取，别直接调 `trumanPlan`。
     - `teleportNear`、`spawnGuest`（小雨、林父首次登场时生成）。
-  - `story.js`：提示词（`BIBLE`、`RULES`、`buildPrompt`）、`callAI`（逐行解析 JSON）、`offlineScene` / `offlineEnd`、错误码文案。
-  - `director.js`：导演层。`place` → `checkTriggers` → `runScene` → `applyEnd`；按小时 / 时段 / 天结算。存档放在 localStorage 的 `truelife.3d.v2`。
+  - `story.js`：提示词（`BIBLE`、`RULES`、`buildPrompt`、`buildDiaryPrompt`、`buildFinalePrompt`）、`callAI`（逐行解析 JSON）、`sanitizeStops`（清洗 AI 给的行程）、排练剧本 `offlineScene` / `offlineEnd` / `offlineDiary` / `offlineFinale`、错误码文案。
+  - `director.js`：导演层。`place` → `checkTriggers` → `runScene` → `applyEnd`；按小时 / 时段 / 天结算。存档放在 localStorage 的 `truelife.3d.v2`（读旧档时用 `fresh()` 的默认值补字段）。
+    - `tick()` 每帧调用：`checkTriggers` → `checkDiary`（23:00 后在家写日记，写完前 `sim.gate` 把时间卡在次日 06:00）→ `checkEscape`（出逃状态机：空档动身 → 码头（有阻拦卡时）→ 大桥 → 出口 → `enterFinale`）。
+    - `runFinale` / `endGame`：结局类型见 `data.js` 的 `ENDINGS`；`D.ended` 存档后刷新仍显示结局。`locked` 为真时不能调速度、不能放卡。
+    - `accident(id)`：事故；`recentAccident()` 给 60 分钟内的戏带上事故。测试可以直接调 `director.accident('rain')`。
   - `world3d.js`：Three.js r160（`public/vendor/` 里的本地副本）。
     - 像素管线：低分辨率渲染目标 + 深度/法线描边 + 最近邻放大；相机吸附像素网格，小数部分在后处理里补偿。
     - 穹顶 shader：`uSus` 控制面板裂缝。
     - 方块小人、场记板标记、偷拍 CRT 画中画。
   - `ui.js`：手牌拖放 / 点选、放置小窗、待拍名牌、导演笔记抽屉（林楚 / 场记 / 破绽）、顶部数值、弹幕、提示。
   - `main.js`：启动、3D 名牌和对话气泡、镜头操作、主循环。
-- `public/index.html`：2D 回合制版本，单文件。里面还有没搬到 3D 的代码可以直接复用：`buildFinalePrompt`、`runFinale`、`ENDINGS`、`renderOverlay`、`ACCIDENTS`、`drawAccident`。
+- `public/2d.html`：2D 回合制版本，单文件。最终幕、结局、事故已经搬到 3D，两边各自维护。
 - `public/fonts/`：Fusion Pixel 12px 简体（OFL）。
 
 ## 约定
@@ -44,6 +48,7 @@ AI 版《模拟人生》+《楚门的世界》。玩家是一档 24 小时直播
 - 每个文件先跑 `node --check`（`package.json` 设了 `"type": "module"`）。
 - 浏览器测试用 Playwright 无头 Chromium。WebGL 需要启动参数 `--use-gl=angle --use-angle=swiftshader --enable-unsafe-swiftshader`；首次编译着色器很慢，等待时间要放宽到 90 秒以上。
 - 页面暴露 `window.__booted`（已启动）、`window.__game = { sim, director, world, ui }`、`window.__perf()`，脚本可以用它们读状态、跳时间（`sim.min = …`）。
+- 整季验收：`PW=…/playwright/index.mjs node tests/m3-flow.mjs [--real] [--only=desktop|mobile]`，`BASE` 指定地址，`CHROME` 指定浏览器（本机缓存的 Chromium 版本和 Playwright 不配套时用）。
 - 大部分流程用排练模式测（导演组选“排练”，或设 `director.D.crew = 'offline'`），只留一两场用真 DeepSeek，省额度。
 - 每次测完截桌面 1360×900 和手机 400×860 各一张图，确认控制台无报错、页面无横向滚动。
 

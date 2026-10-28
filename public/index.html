@@ -6,14 +6,14 @@
 <title>真实人生</title>
 <link rel="stylesheet" href="fonts/Fusion-Pixel-12px-Proportional-Simplified-Chinese.css">
 <style>
-/* Layout: a TV control room. Live monitor + director's console on the left; the subject's inner voice, clues and the script log on the right. Single dark theme by choice: the booth is always dark, the fake town glows inside the monitor. */
+/* 全屏 3D 小镇，界面浮在上面。像素字体只用 12px 和 24px，保证每个像素都落在整数位置上。 */
 :root{
-  --room:#121a29;
-  --panel:#19233a;
-  --panel-2:#212d45;
-  --line:#2c3b58;
+  --bg:#0b1120;
+  --panel:#131c2f;
+  --panel-2:#1c2740;
+  --edge:#33456b;
   --ink:#e8edf7;
-  --muted:#8f9cb7;
+  --muted:#93a1bd;
   --sky:#8fd3ff;
   --tally:#ff4d4f;
   --paper:#f3ead3;
@@ -21,1485 +21,397 @@
   --paper-muted:#6b6358;
   --warn:#ffb648;
   --calm:#6fd6a8;
-  --f-display:"Fusion Pixel 12px Proportional Simplified Chinese","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
-  --f-body:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
-  --f-serif:"Songti SC","STSong","SimSun","Noto Serif SC",serif;
-  --f-mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --px:"Fusion Pixel 12px Proportional Simplified Chinese","PingFang SC","Microsoft YaHei",sans-serif;
+  --gut-l:max(14px,env(safe-area-inset-left,0px));
+  --gut-r:max(14px,env(safe-area-inset-right,0px));
+  --gut-t:max(14px,env(safe-area-inset-top,0px));
+  --gut-b:max(14px,env(safe-area-inset-bottom,0px));
+  --top-h:74px;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
-html,body{height:100%}
-body{background:var(--room);color:var(--ink);font-family:var(--f-body);font-size:14px;line-height:1.6;-webkit-font-smoothing:antialiased}
-button,input,select,textarea{font:inherit;color:inherit}
-:focus-visible{outline:2px solid var(--sky);outline-offset:2px}
+html,body{height:100%;margin:0;overflow:clip;background:var(--bg)}
+body{color:var(--ink);font:12px/18px var(--px);-webkit-font-smoothing:none;-moz-osx-font-smoothing:grayscale}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--sky);outline-offset:3px}
+#game{position:relative;width:100%;height:100%;overflow:clip}
+#view{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+#view:active{cursor:grabbing}
 
-.app{max-width:1440px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:14px 28px;display:flex;flex-direction:column;gap:14px}
+/* 像素边框：四条外阴影拼出缺角的方框 */
+.px{background:var(--panel);box-shadow:3px 0 0 0 var(--edge),-3px 0 0 0 var(--edge),0 3px 0 0 var(--edge),0 -3px 0 0 var(--edge),inset 0 3px 0 0 rgba(255,255,255,.05)}
+.pbtn{appearance:none;border:0;background:var(--panel-2);color:var(--ink);padding:3px 9px;cursor:pointer;line-height:18px;box-shadow:2px 0 0 0 var(--edge),-2px 0 0 0 var(--edge),0 2px 0 0 var(--edge),0 -2px 0 0 var(--edge)}
+.pbtn:hover:not(:disabled){background:#25335a}
+.pbtn:active:not(:disabled){transform:translateY(1px)}
+.pbtn:disabled{opacity:.45;cursor:not-allowed}
+.pbtn[aria-pressed="true"],.pbtn[aria-selected="true"],.pbtn.primary{background:var(--sky);color:var(--bg)}
 
-/* header */
-.bar{display:flex;flex-wrap:wrap;align-items:center;gap:10px 22px;padding:10px 16px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
-.brand{display:flex;align-items:center;gap:12px;margin-right:auto;min-width:0}
-.logo{font-family:var(--f-display);font-size:36px;line-height:1;letter-spacing:.04em;color:var(--sky);-webkit-font-smoothing:none}
-.to3d{font-family:var(--f-display);font-size:12px;color:var(--sky);text-decoration:none;border:1px solid var(--line);border-radius:6px;padding:3px 8px}
-.to3d:hover{border-color:var(--sky)}
-.brand-sub{display:flex;flex-direction:column;line-height:1.3}
-.brand-sub small{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.16em;color:var(--muted)}
-.tally{display:inline-flex;align-items:center;gap:6px;font-family:var(--f-mono);font-weight:600;font-size:11px;letter-spacing:.16em;color:#fff;background:var(--tally);padding:2px 8px;border-radius:4px;box-shadow:0 0 14px rgba(255,77,79,.5);align-self:flex-start}
-.tally i{width:7px;height:7px;border-radius:50%;background:#fff}
-body.shooting .tally{animation:pulse 1s ease-in-out infinite}
-@keyframes pulse{50%{opacity:.6;box-shadow:0 0 3px rgba(255,77,79,.2)}}
-.stat{display:flex;flex-direction:column;gap:1px;min-width:0}
-.stat .k{font-size:11px;letter-spacing:.12em;color:var(--muted)}
-.stat .v{font-family:var(--f-mono);font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.25;display:flex;align-items:center;gap:8px;white-space:nowrap}
-.stat .v small{font-family:var(--f-body);font-size:12px;color:var(--muted);font-weight:400}
-.gauge{position:relative;width:96px;height:8px;border-radius:4px;background:var(--panel-2);overflow:hidden}
-.gauge b{position:absolute;left:0;top:0;bottom:0;border-radius:4px;background:var(--calm);transition:width .6s ease,background-color .6s ease}
-.gauge i{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.28)}
-.spark{display:block}
-.crew{display:flex;flex-direction:column;gap:2px;min-width:0}
-.crew-row{display:flex;gap:6px;align-items:center}
-.crew select{background:var(--panel-2);border:1px solid var(--line);border-radius:6px;padding:3px 6px;font-size:13px}
-#crew-status{font-size:11px;color:var(--muted);max-width:220px}
-.ghost{background:transparent;border:1px solid var(--line);border-radius:8px;padding:5px 11px;cursor:pointer;font-size:13px;color:var(--ink)}
-.ghost:hover{border-color:var(--sky)}
+/* 顶部状态条 */
+.top{position:absolute;z-index:5;top:var(--gut-t);left:var(--gut-l);right:var(--gut-r);display:flex;flex-wrap:wrap;align-items:center;gap:8px 20px;padding:8px 14px}
+.brand{display:flex;align-items:center;gap:12px;margin-right:auto}
+.logo{font-size:24px;line-height:24px;color:var(--sky)}
+.onair{background:var(--tally);color:#fff;padding:0 6px;letter-spacing:.1em}
+.shooting .onair{animation:pulse 1s steps(2,start) infinite}
+@keyframes pulse{50%{opacity:.5}}
+.brand small{color:var(--muted)}
+.back{color:var(--muted);text-decoration:none}
+.back:hover{color:var(--sky)}
+.clock{display:flex;align-items:baseline;gap:10px}
+.clock b{font-weight:400;font-size:24px;line-height:24px;font-variant-numeric:tabular-nums}
+#clock-day{font-size:12px;color:var(--muted)}
+.chip{padding:0 6px;background:var(--panel-2);color:var(--sky)}
+.chip.ff{background:var(--warn);color:#2b1d00}
+.shooting .chip{background:var(--tally);color:#fff}
+.speed{display:flex;gap:6px}
+.stats{display:flex;gap:18px;align-items:flex-end}
+.stat{display:flex;flex-direction:column}
+.stat > span{color:var(--muted)}
+.stat b{font-weight:400;font-size:24px;line-height:24px;display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+.stat small{font-size:12px;color:var(--muted)}
+#rate.low{color:var(--warn)}
+.bar{display:inline-block;width:72px;height:6px;background:var(--panel-2);position:relative}
+.bar b{position:absolute;left:0;top:0;bottom:0;background:var(--calm);display:block}
+.crew{display:flex;flex-direction:column;gap:2px;max-width:210px}
+.crew-row{display:flex;gap:6px}
+.crew select{background:var(--panel-2);border:0;padding:2px 4px;box-shadow:0 0 0 2px var(--edge)}
+#ai-status{color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
-/* stage */
-.stage{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:14px;align-items:start}
-.col-l,.col-r{display:flex;flex-direction:column;gap:14px;min-width:0}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
-.panel h2{margin:0;font-family:var(--f-display);font-weight:400;font-size:24px;-webkit-font-smoothing:none;letter-spacing:.05em;display:flex;align-items:baseline;gap:10px;line-height:1.2}
-.panel h2 small{font-family:var(--f-body);font-size:12px;color:var(--muted);letter-spacing:.02em}
+/* 警报、拍摄提示条、提示 */
+.alert{position:absolute;z-index:5;left:var(--gut-l);top:calc(var(--gut-t) + var(--top-h) + 6px);max-width:min(520px,calc(100% - 340px));padding:4px 10px;background:#3a1620;color:#ffd7d8;box-shadow:2px 0 0 0 var(--tally),-2px 0 0 0 var(--tally),0 2px 0 0 var(--tally),0 -2px 0 0 var(--tally)}
+.alert.run{background:var(--tally);color:#fff;animation:pulse 1s steps(2,start) infinite}
+.shoot{position:absolute;z-index:6;left:50%;transform:translateX(-50%);top:calc(var(--gut-t) + var(--top-h) + 8px);width:min(560px,calc(100% - 2 * var(--gut-l)));padding:8px 12px;display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:center}
+.shoot .rec{color:var(--tally)}
+#shoot-title{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#shoot-cap{grid-column:1 / -1;margin:0;color:var(--paper);min-height:18px}
+.shoot .btns{display:flex;gap:6px}
+.toast{position:absolute;z-index:7;left:50%;transform:translateX(-50%);bottom:200px;max-width:calc(100% - 2 * var(--gut-l));padding:4px 12px;background:var(--panel);color:var(--ink);box-shadow:2px 0 0 0 var(--sky),-2px 0 0 0 var(--sky),0 2px 0 0 var(--sky),0 -2px 0 0 var(--sky)}
+.toast.bad{box-shadow:2px 0 0 0 var(--warn),-2px 0 0 0 var(--warn),0 2px 0 0 var(--warn),0 -2px 0 0 var(--warn);color:var(--warn)}
+.danmu{position:absolute;z-index:2;left:0;right:0;top:calc(var(--gut-t) + var(--top-h) + 64px);height:110px;pointer-events:none;overflow:hidden}
+.danmu span{position:absolute;left:100%;white-space:nowrap;color:#fff;text-shadow:1px 1px 0 #000,-1px 0 0 #000}
 
-/* monitor */
-.monitor{position:relative;border-radius:14px;overflow:hidden;background:#0a0e17;border:1px solid var(--line);box-shadow:0 12px 30px rgba(0,0,0,.35)}
-.monitor canvas{display:block;width:100%;aspect-ratio:16/9;max-width:100%}
-.monitor .vig{position:absolute;inset:0;pointer-events:none;background:radial-gradient(ellipse at 50% 50%,transparent 58%,rgba(6,9,16,.72) 100%)}
-.monitor .scan{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.07) 0 1px,transparent 1px 3px)}
-.osd{position:absolute;font-family:var(--f-mono);font-size:12px;color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.9);letter-spacing:.06em;display:flex;align-items:center;gap:6px}
-.osd.tl{top:10px;left:12px}
-.osd.tr{top:10px;right:12px;font-variant-numeric:tabular-nums}
-.rec{width:8px;height:8px;border-radius:50%;background:var(--tally);animation:blink 1.4s steps(2,start) infinite}
-@keyframes blink{to{visibility:hidden}}
-.subtitle{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);width:max-content;max-width:88%;text-align:center;background:rgba(9,13,22,.74);padding:5px 12px;border-radius:6px;font-size:clamp(12.5px,1.5vw,16px);line-height:1.5}
-.subtitle i{font-style:normal;color:#c9d2e3}
-.danmu{position:absolute;left:0;right:0;top:34px;height:42%;pointer-events:none;overflow:hidden}
-.danmu span{position:absolute;left:100%;white-space:nowrap;color:#fff;font-weight:500;font-size:clamp(12px,1.4vw,15px);text-shadow:0 1px 2px rgba(0,0,0,.9),0 0 6px rgba(0,0,0,.5)}
+/* 右侧抽屉 */
+.drawer{position:absolute;z-index:4;right:var(--gut-r);top:calc(var(--gut-t) + var(--top-h) + 6px);width:300px;height:calc(100% - var(--top-h) - 250px);min-height:220px;display:flex;transform:translateX(calc(100% + var(--gut-r) + 6px));transition:transform .25s steps(5)}
+.drawer.open{transform:none}
+.drawer-tab{position:absolute;left:-38px;top:0;width:30px;padding:8px 0;writing-mode:vertical-rl;letter-spacing:.2em}
+.drawer-body{display:flex;flex-direction:column;gap:10px;width:100%;padding:10px 12px;min-height:0}
+.tabs{display:flex;gap:8px}
+.tabs .pbtn small{color:inherit;opacity:.75}
+.panel{overflow:auto;display:flex;flex-direction:column;gap:10px;min-height:0;flex:1}
+.drawer h3{margin:0;font-weight:400;color:var(--muted);display:flex;justify-content:space-between}
+.now{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0}
+.now dt{color:var(--muted)}
+.now dd{margin:0}
+.mind{margin:0;color:var(--paper)}
+.sched{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:2px}
+.sched li{display:grid;grid-template-columns:40px 1fr;gap:8px;padding:1px 4px}
+.sched li time{color:var(--muted)}
+.sched li.done{opacity:.45}
+.sched li.now{background:var(--sky);color:var(--bg)}
+.sched li.now time{color:var(--bg)}
+.sched li.extra:not(.now){color:var(--warn)}
+.diary{margin:0;padding:6px 8px;background:var(--paper);color:var(--paper-ink)}
+.l-diary{display:flex;flex-direction:column;gap:3px;margin-top:6px}
+.l-diary .slate{align-self:flex-start;background:var(--paper);color:var(--paper-ink)}
+.l-diary p{margin:0;color:var(--paper)}
+.debug{display:flex;flex-direction:column;gap:6px;padding-top:8px;border-top:2px dashed var(--edge)}
+.debug input[type=range]{width:100%;accent-color:var(--sky)}
+.jump{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.jump span{color:var(--muted)}
+.log{gap:3px}
+.l-day{color:var(--sky);text-align:center;margin-top:6px}
+.l-take{display:flex;flex-wrap:wrap;gap:2px 6px;align-items:center;margin-top:6px}
+.l-take em{font-style:normal;color:var(--muted)}
+.slate{background:var(--ink);color:var(--bg);padding:0 4px}
+.l-dir{color:var(--sky)}
+.l-beat{display:grid;grid-template-columns:36px 1fr;gap:6px}
+.l-beat .who{text-align:right}
+.l-beat .act{color:var(--muted)}
+.l-act{color:var(--muted);padding-left:42px}
+.l-note{color:var(--warn);padding-left:42px}
+.l-res{color:var(--muted);padding-left:42px}
+.l-sys{color:var(--sky)}
+.l-acc{color:#ffd7d8;background:#3a1620;padding:2px 6px;margin-top:4px}
+.clues{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.clues li{display:grid;grid-template-columns:auto 1fr;gap:8px}
+.clues time{color:var(--muted)}
+.clues .empty{display:block;color:var(--muted)}
 
-/* console */
-.console-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 12px}
-.console-head .when{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
-.alert{border-radius:8px;padding:8px 12px;font-size:13px;display:flex;gap:10px;align-items:baseline;line-height:1.55}
-.alert .tag{flex:none;font-size:11px;font-weight:700;letter-spacing:.1em;padding:1px 6px;border-radius:3px}
-.alert.acc{background:rgba(255,182,72,.1);border:1px solid rgba(255,182,72,.42)}
-.alert.acc .tag{background:var(--warn);color:#2b1d00}
-.alert.esc{background:rgba(255,77,79,.1);border:1px solid rgba(255,77,79,.45)}
-.alert.esc .tag{background:var(--tally);color:#fff}
-.step{display:flex;flex-direction:column;gap:8px}
-.step-k{font-size:12.5px;color:var(--muted);letter-spacing:.04em}
-.step-k b{font-family:var(--f-mono);color:var(--sky);margin-right:6px;font-weight:600}
+/* 偷拍小窗：WebGL 直接画在 #crt-screen 的位置 */
+.crt{position:absolute;z-index:2;left:var(--gut-l);bottom:var(--gut-b);padding:22px 0;background:transparent}
+.crt-screen{width:240px;height:180px;position:relative;pointer-events:none}
+.crt-screen::after{content:"";position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(0,0,0,.18) 0 1px,transparent 1px 3px)}
+.crt-top,.crt-bot{position:absolute;left:0;right:0;height:22px;padding:0 8px;background:#0d1322;display:flex;justify-content:space-between;align-items:center;gap:8px;white-space:nowrap;overflow:hidden}
+.crt-top{top:0;color:var(--muted)}
+.crt-bot{bottom:0}
+.crt .rec{color:var(--tally)}
 
-.cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
-.card{appearance:none;border:0;text-align:left;cursor:pointer;background:var(--paper);color:var(--paper-ink);border-radius:4px;padding:10px 11px 9px;display:flex;flex-direction:column;gap:5px;box-shadow:0 2px 0 rgba(0,0,0,.35);transition:transform .15s ease,box-shadow .15s ease;min-width:0}
-.card:hover:not(:disabled){transform:translateY(-2px)}
-.card[aria-pressed="true"]{transform:translateY(-4px) rotate(-.6deg);box-shadow:0 0 0 3px var(--sky),0 8px 18px rgba(0,0,0,.4)}
-.card:disabled{opacity:.42;cursor:not-allowed}
-.card .stamp{align-self:flex-start;font-size:11px;font-weight:700;letter-spacing:.14em;padding:0 5px;border:1.5px solid currentColor;border-radius:3px;transform:rotate(-3deg)}
-.card[data-cat="drama"] .stamp{color:#b8325c}
-.card[data-cat="calm"] .stamp{color:#1d7f55}
-.card[data-cat="block"] .stamp{color:#a35f00}
-.card .t{font-weight:700;font-size:15px;line-height:1.35;padding-bottom:4px;border-bottom:1.5px solid rgba(214,92,92,.5)}
-.card .d{font-size:12px;line-height:1.55;color:var(--paper-muted);flex:1}
-.card .meta{display:flex;flex-wrap:wrap;gap:2px 10px;font-size:11px;color:var(--paper-muted);font-variant-numeric:tabular-nums}
+/* 镜头按钮 */
+.cam{position:absolute;z-index:3;right:var(--gut-r);bottom:calc(var(--gut-b) + 24px);display:flex;gap:8px;padding:6px 8px}
+.help{position:absolute;z-index:3;right:var(--gut-r);bottom:var(--gut-b);margin:0;color:var(--muted);text-shadow:0 1px 0 #000}
 
-.chips{display:flex;flex-wrap:wrap;gap:8px}
-.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 11px;border-radius:999px;border:1px solid var(--line);background:var(--panel-2);cursor:pointer;font-size:13px;color:var(--ink)}
-.chip i{width:9px;height:9px;border-radius:50%;background:var(--c,var(--muted))}
-.chip small{color:var(--muted);font-size:11px}
-.chip[aria-pressed="true"]{border-color:var(--sky);background:rgba(143,211,255,.14)}
-.chip:disabled{opacity:.4;cursor:not-allowed}
-.actor-note{font-size:12px;color:var(--muted);margin:0}
+/* 手牌 */
+.hand{position:absolute;z-index:3;left:50%;bottom:0;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;pointer-events:none}
+.hand-note{background:var(--panel);padding:2px 8px;margin-bottom:10px;color:var(--muted);box-shadow:2px 0 0 0 var(--edge),-2px 0 0 0 var(--edge),0 2px 0 0 var(--edge),0 -2px 0 0 var(--edge)}
+.hand-cards{display:flex;pointer-events:auto;min-height:40px}
+.card{appearance:none;border:0;text-align:left;cursor:grab;touch-action:none;user-select:none;width:116px;height:156px;margin:0 -8px;padding:8px 9px;background:var(--paper);color:var(--paper-ink);display:flex;flex-direction:column;gap:3px;transform:translateY(66px) rotate(var(--r));transition:transform .18s steps(4);box-shadow:0 0 0 2px #2b2620,0 4px 0 2px rgba(0,0,0,.35)}
+.card:hover:not(:disabled),.card:focus-visible,.card.armed{transform:translateY(0) rotate(0);z-index:2}
+.card.armed{box-shadow:0 0 0 2px #2b2620,0 0 0 5px var(--sky)}
+.card.lifted{opacity:.3}
+.card:disabled{cursor:not-allowed;filter:grayscale(.6) brightness(.8)}
+.card .stamp,.pop .stamp{align-self:flex-start;padding:0 4px;box-shadow:0 0 0 1px currentColor}
+.card[data-cat="drama"] .stamp,.stamp[data-cat="drama"]{color:#b8325c}
+.card[data-cat="calm"] .stamp,.stamp[data-cat="calm"]{color:#1d7f55}
+.card[data-cat="block"] .stamp,.stamp[data-cat="block"]{color:#a35f00}
+.card b{font-weight:400;padding-bottom:3px;border-bottom:2px solid rgba(214,92,92,.5)}
+.card .d{color:var(--paper-muted);flex:1;overflow:hidden}
+.card .meta,.card .cost{color:var(--paper-muted)}
+.drag-ghost{position:fixed;left:0;top:0;z-index:30;pointer-events:none;margin:0;opacity:.95;transition:none;transform-origin:50% 100%}
 
-.whisper{display:flex;align-items:center;gap:10px;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:0 10px}
-.whisper:focus-within{border-color:var(--sky)}
-.whisper .tag{flex:none;font-family:var(--f-mono);font-size:10.5px;letter-spacing:.12em;color:var(--sky)}
-.whisper input{flex:1;min-width:0;background:transparent;border:0;padding:9px 0;outline:none}
-.whisper input::placeholder,textarea::placeholder{color:#64708a}
+/* 跟着 3D 物体走的标签 */
+.labels{position:absolute;inset:0;z-index:1;pointer-events:none}
+.labels > *{position:absolute;left:0;top:0;will-change:transform;white-space:nowrap}
+.loc{pointer-events:auto;cursor:pointer;border:0;color:#fff;background:rgba(11,17,32,.72);padding:0 6px;margin:0;translate:-50% -100%;box-shadow:2px 0 0 0 rgba(255,255,255,.25),-2px 0 0 0 rgba(255,255,255,.25),0 2px 0 0 rgba(255,255,255,.25),0 -2px 0 0 rgba(255,255,255,.25)}
+.loc:hover{background:var(--sky);color:var(--bg)}
+.loc.exit{cursor:default;background:#151b28;color:var(--sky)}
+.loc.acc{pointer-events:none;background:var(--tally);color:#fff}
+.loc.ok{background:#173450;color:var(--sky);box-shadow:2px 0 0 0 var(--sky),-2px 0 0 0 var(--sky),0 2px 0 0 var(--sky),0 -2px 0 0 var(--sky);animation:pulse 1s steps(2,start) infinite}
+.loc.dim{opacity:.3}
+.loc.hot,.tag.star.hot{background:var(--sky);color:var(--bg);animation:none;padding:3px 10px;box-shadow:2px 0 0 0 #fff,-2px 0 0 0 #fff,0 2px 0 0 #fff,0 -2px 0 0 #fff}
+.placing .tag:not(.star),.placing .bubble{opacity:.35}
+.tag{translate:-50% -100%;padding:0 5px;background:rgba(11,17,32,.78);color:#fff;border-left:6px solid var(--c)}
+.tag.star{background:var(--c);color:#141821;border:0;pointer-events:auto;cursor:pointer}
+.tag.star.ok{box-shadow:0 0 0 2px var(--sky);animation:pulse 1s steps(2,start) infinite}
+.tag.star.run{background:var(--tally);color:#fff}
+.tag.inside{background:var(--panel);color:var(--sky);border-left:6px solid var(--sky);animation:pulse 1.6s steps(2,start) infinite}
+.bubble{translate:-50% -100%;max-width:220px;white-space:normal;background:var(--paper);color:var(--paper-ink);padding:4px 8px;z-index:1;box-shadow:2px 0 0 0 #2b2620,-2px 0 0 0 #2b2620,0 2px 0 0 #2b2620,0 -2px 0 0 #2b2620}
+.bubble::after{content:"";position:absolute;left:calc(50% - 4px);bottom:-8px;width:8px;height:6px;background:#2b2620}
+.bubble.thought{background:#dfe9f7}
+.pin{translate:-50% -100%;pointer-events:auto;display:flex;align-items:center;gap:6px;background:#1d1d24;color:#fff;padding:0 0 0 6px;box-shadow:2px 0 0 0 #fff,-2px 0 0 0 #fff,0 2px 0 0 #fff,0 -2px 0 0 #fff}
+.pin small{color:var(--warn);font-size:12px}
+.pin-x{border:0;background:#3a3a46;color:#fff;cursor:pointer;padding:0 6px}
+.pin-x:hover{background:var(--tally)}
 
-.action{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;justify-content:space-between}
-.sponsor{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;min-width:0}
-.sponsor input{accent-color:var(--sky);width:16px;height:16px;flex:none}
-.sponsor em{font-style:normal;color:var(--calm);font-family:var(--f-mono);font-size:12px}
-.btns{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.go{border:0;cursor:pointer;font-family:var(--f-display);font-size:24px;-webkit-font-smoothing:none;letter-spacing:.2em;padding:7px 20px 7px 50px;border-radius:8px;color:#0d1522;background:var(--sky);position:relative;overflow:hidden;line-height:1.3}
-.go::before{content:"";position:absolute;left:0;top:0;bottom:0;width:34px;background:repeating-linear-gradient(135deg,#0d1522 0 7px,var(--paper) 7px 14px)}
-.go:hover:not(:disabled){filter:brightness(1.08)}
-.go:disabled{opacity:.5;cursor:wait}
-.hint{margin:0;font-size:12.5px;color:var(--muted);min-height:1.6em}
-.hint.bad{color:var(--warn)}
-textarea{width:100%;background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:9px 10px;resize:vertical;outline:none;line-height:1.6}
-textarea:focus{border-color:var(--sky)}
+/* 放置小窗 */
+.pop{position:absolute;z-index:15;width:300px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.pop-head{display:flex;gap:8px;align-items:center}
+.pop-head b{font-weight:400;font-size:24px;line-height:24px}
+.pop p{margin:0}
+.pop-desc,.pop-note,.pop-cost{color:var(--muted)}
+.pop-where{color:var(--sky)}
+.pop-where.warn{color:var(--warn)}
+.pop-label{color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.achip{appearance:none;border:0;display:inline-flex;align-items:center;gap:5px;padding:2px 8px;background:var(--panel-2);color:var(--ink);cursor:pointer;box-shadow:0 0 0 2px var(--edge)}
+.achip i{width:8px;height:8px;display:inline-block}
+.achip[aria-pressed="true"]{box-shadow:0 0 0 2px var(--sky);background:#173450}
+.achip:disabled{opacity:.35;cursor:not-allowed}
+.pop input[type=text],.pop input:not([type]){width:100%;background:var(--panel-2);border:0;padding:5px 8px;box-shadow:0 0 0 2px var(--edge);outline:none}
+.pop input:not([type]):focus{box-shadow:0 0 0 2px var(--sky)}
+.pop-sponsor{display:flex;gap:6px;align-items:flex-start;cursor:pointer}
+.pop-sponsor input{accent-color:var(--sky);margin:3px 0 0}
+.pop-btns{display:flex;justify-content:flex-end;gap:10px}
 
-/* right column */
-.mind blockquote{margin:0;font-family:var(--f-serif);font-size:17px;line-height:1.85;color:var(--paper);text-wrap:pretty}
-.mind .stamp-d{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
-.older{display:flex;flex-direction:column;gap:6px}
-.older p{margin:0;font-family:var(--f-serif);font-size:13px;line-height:1.7;color:var(--muted)}
-.intent{display:flex;gap:10px;align-items:baseline;padding-top:10px;border-top:1px dashed var(--line);font-size:13.5px}
-.intent span{color:var(--muted);flex:none;font-size:12px}
-.intent.esc b{color:var(--tally)}
-.clues{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
-.clues li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:10px;font-size:13px;align-items:baseline}
-.clues time{font-family:var(--f-mono);font-size:11px;color:var(--muted);white-space:nowrap}
-.empty{font-size:13px;color:var(--muted);margin:0}
-.log-body{max-height:440px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;padding-right:4px;font-size:13.5px}
-.l-day{display:flex;align-items:center;gap:10px;color:var(--sky);font-family:var(--f-display);font-size:24px;margin-top:6px;-webkit-font-smoothing:none}
-.l-day::before,.l-day::after{content:"";flex:1;height:1px;background:var(--line)}
-.l-take{display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;margin-top:8px;font-weight:700}
-.l-take em{font-style:normal;color:var(--muted);font-weight:400}
-.slate{font-family:var(--f-mono);font-size:11px;padding:0 6px;border-radius:2px;background:var(--ink);color:var(--room);font-weight:600}
-.l-dir{font-size:12px;color:var(--sky);opacity:.8}
-.l-beat{display:grid;grid-template-columns:4.2em minmax(0,1fr);gap:8px}
-.l-beat .who{color:var(--c,var(--muted));font-weight:700;text-align:right}
-.l-beat .act{color:var(--muted);font-size:12.5px}
-.l-act{color:var(--muted);font-size:13px;padding-left:calc(4.2em + 8px)}
-.l-note{font-size:12.5px;color:var(--warn);padding-left:calc(4.2em + 8px)}
-.l-res{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);padding-left:calc(4.2em + 8px);font-variant-numeric:tabular-nums}
-.l-sys{font-size:12.5px;color:var(--sky)}
+/* 最终幕 */
+.finale{position:absolute;z-index:6;left:50%;transform:translateX(-50%);bottom:calc(var(--gut-b) + 8px);width:min(520px,calc(100% - 2 * var(--gut-l)));padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.finale p{margin:0}
+.finale .rec{color:var(--tally)}
+.finale label{color:var(--muted)}
+.finale textarea{width:100%;resize:none;background:var(--panel-2);border:0;padding:5px 8px;box-shadow:0 0 0 2px var(--edge);outline:none;font:inherit;color:inherit}
+.finale textarea:focus{box-shadow:0 0 0 2px var(--sky)}
+.finale .btns,.endbar{display:flex;justify-content:flex-end;gap:10px;align-items:center}
+.endbar{position:absolute;z-index:6;left:50%;transform:translateX(-50%);bottom:calc(var(--gut-b) + 8px);padding:8px 12px;max-width:calc(100% - 2 * var(--gut-l))}
+.endbar span{margin-right:auto}
+.finale-on .toast{bottom:auto;top:calc(var(--gut-t) + var(--top-h) + 8px)}
+.finale-on .hand,.ended-on .hand,.finale-on .help,.ended-on .help{display:none}
 
-/* ending */
-.overlay{position:fixed;inset:0;z-index:50;background:rgba(8,12,20,.8);display:grid;place-items:center;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
-.end-card{max-width:540px;width:100%;background:var(--paper);color:var(--paper-ink);border-radius:6px;padding:26px 24px;display:flex;flex-direction:column;gap:12px;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-.end-card .eyebrow{font-family:var(--f-mono);font-size:11px;letter-spacing:.16em;color:var(--paper-muted)}
-.end-card h2{font-family:var(--f-display);font-weight:400;font-size:36px;margin:0;line-height:1.15;text-wrap:balance}
-.end-card p{margin:0;font-family:var(--f-serif);font-size:15px;line-height:1.85}
-.end-card dl{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:4px 0 0;padding-top:12px;border-top:1px solid rgba(43,38,32,.15)}
-.end-card dt{font-size:11px;color:var(--paper-muted)}
-.end-card dd{margin:0;font-family:var(--f-mono);font-size:18px;font-weight:600;font-variant-numeric:tabular-nums}
-.end-card .btns{margin-top:4px}
-.end-card button{border-radius:6px;padding:8px 16px;cursor:pointer;border:1px solid rgba(43,38,32,.3);background:transparent;color:var(--paper-ink)}
-.end-card button.primary{background:#0d1522;color:var(--paper);border-color:#0d1522}
+/* 结局弹窗：牛皮纸卡片 + 像素边框 */
+.overlay{position:absolute;inset:0;z-index:50;display:grid;place-items:center;padding:var(--gut-t) var(--gut-r) var(--gut-b) var(--gut-l);background:rgba(8,12,20,.78)}
+.end-card{width:min(460px,100%);max-height:100%;overflow:auto;background:var(--paper);color:var(--paper-ink);padding:18px 20px;display:flex;flex-direction:column;gap:10px;box-shadow:4px 0 0 0 #2b2620,-4px 0 0 0 #2b2620,0 4px 0 0 #2b2620,0 -4px 0 0 #2b2620,0 12px 0 4px rgba(0,0,0,.35)}
+.end-card .eyebrow{color:var(--paper-muted);letter-spacing:.1em}
+.end-head{display:flex;align-items:center;gap:12px}
+.end-card h2{margin:0;font-weight:400;font-size:24px;line-height:24px}
+.rank{font-size:24px;line-height:24px;padding:4px 8px;background:var(--tally);color:#fff}
+.end-card p{margin:0}
+.end-card dl{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0;padding-top:10px;border-top:2px dashed rgba(43,38,32,.3)}
+.end-card dt{color:var(--paper-muted)}
+.end-card dd{margin:0}
+.end-card .btns{display:flex;justify-content:flex-end;gap:10px;margin-top:4px}
+.end-card .pbtn{background:var(--paper);color:var(--paper-ink);box-shadow:2px 0 0 0 #2b2620,-2px 0 0 0 #2b2620,0 2px 0 0 #2b2620,0 -2px 0 0 #2b2620}
+.end-card .pbtn.primary{background:#2b2620;color:var(--paper)}
 
-@media (max-width:980px){
-  .stage{display:flex;flex-direction:column;align-items:stretch}
-  .subtitle{bottom:8px;max-width:94%;padding:4px 10px}
-  .col-l,.col-r{display:contents}
-  .monitor{order:1}.mind{order:2}.console{order:3}.clues-p{order:4}.log-p{order:5}
-  .log-body{max-height:360px}
+.loading{position:absolute;inset:0;z-index:40;display:grid;place-items:center;background:var(--bg);color:var(--sky);font-size:24px;line-height:24px;text-align:center;padding:0 24px}
+
+@media (max-width:760px){
+  :root{--top-h:150px}
+  .top{gap:6px 14px;padding:6px 10px}
+  .stats{gap:12px}
+  .stat b{font-size:12px;line-height:18px}
+  .brand small,.crew #ai-status{display:none}
+  .alert{max-width:calc(100% - 2 * var(--gut-l))}
+  .drawer{width:min(290px,calc(100% - 70px));height:calc(100% - var(--top-h) - 230px)}
+  .crt{bottom:calc(var(--gut-b) + 96px);padding:20px 0}
+  .crt-screen{width:144px;height:108px}
+  .crt-top{display:none}
+  .cam{bottom:auto;right:auto;left:var(--gut-l);top:calc(var(--gut-t) + var(--top-h) + 40px);flex-direction:column;padding:6px}
+  .cam #follow,.cam #overview{writing-mode:vertical-rl;padding:8px 3px}
+  .help,.hand-note{display:none}
+  .card{width:84px;height:120px;padding:6px;transform:translateY(60px) rotate(var(--r))}
+  .card .d,.card .meta{display:none}
+  .toast{bottom:140px}
+  .end-card dl{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .finale-on .crt,.ended-on .crt{display:none}
+  .pop{left:var(--gut-l)!important;right:var(--gut-r);width:auto;top:auto!important;bottom:calc(var(--gut-b) + 8px)}
 }
-@media (max-width:720px){
-  .cards{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .logo{font-size:26px}
-  .end-card dl{grid-template-columns:repeat(2,minmax(0,1fr))}
-}
-@media (prefers-reduced-motion:reduce){
-  *{animation:none!important;transition:none!important}
-  .danmu{display:none}
-}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.danmu{display:none}}
 </style>
 </head>
 <body>
+<div id="game">
+  <canvas id="view" aria-label="晴港镇的 3D 俯视画面，可以拖动、缩放和旋转"></canvas>
+  <div class="labels" id="labels"></div>
+  <div class="danmu" id="danmu" aria-hidden="true"></div>
 
-<div class="app">
-  <header class="bar">
+  <header class="top px">
     <div class="brand">
       <span class="logo">真实人生</span>
-      <div class="brand-sub">
-        <span class="tally"><i></i>ON AIR</span>
-        <small id="showday">直播第 12,410 天</small>
-      </div>
-      <a class="to3d" href="3d.html">3D 版 →</a>
+      <span class="onair">ON AIR</span>
+      <small id="showday">直播第 12,410 天</small>
+      <a class="back" href="2d.html">2D 版</a>
     </div>
-    <div class="stat"><span class="k">本季进度</span><span class="v" id="when">第 1/7 天 · 早上</span></div>
-    <div class="stat"><span class="k">收视</span><span class="v"><span id="rate">820</span><small>万</small><svg class="spark" id="spark" width="64" height="22" viewBox="0 0 64 22" aria-hidden="true"></svg></span></div>
-    <div class="stat"><span class="k">林楚的怀疑值</span><span class="v"><span id="sus">12</span><span class="gauge" aria-hidden="true"><b id="sus-bar"></b><i style="left:30%"></i><i style="left:60%"></i><i style="left:85%"></i></span></span></div>
-    <div class="stat"><span class="k">经费</span><span class="v"><span id="budget">300</span><small>万</small></span></div>
+    <div class="clock"><b id="clock-day">第 1 天</b><b id="clock-time">06:35</b><span class="chip" id="clock-period">早上</span></div>
+    <div class="speed" role="group" aria-label="时间速度">
+      <button class="pbtn" type="button" data-speed="0" aria-pressed="false">暂停</button>
+      <button class="pbtn" type="button" data-speed="1" aria-pressed="true">1x</button>
+      <button class="pbtn" type="button" data-speed="2" aria-pressed="false">2x</button>
+      <button class="pbtn" type="button" data-speed="4" aria-pressed="false">4x</button>
+    </div>
+    <div class="stats">
+      <div class="stat"><span>收视</span><b><span id="rate">820</span><small>万</small><svg id="spark" width="64" height="22" viewBox="0 0 64 22" aria-hidden="true"></svg></b></div>
+      <div class="stat"><span>怀疑值</span><b><span id="sus-val">12</span><i class="bar" aria-hidden="true"><b id="sus-bar"></b></i></b></div>
+      <div class="stat"><span>经费</span><b><span id="budget">300</span><small>万</small></b></div>
+    </div>
     <div class="crew">
-      <label class="k" for="crew" style="font-size:11px;letter-spacing:.12em;color:var(--muted)">导演组</label>
       <div class="crew-row">
-        <select id="crew">
+        <select id="crew" aria-label="导演组">
           <option value="quick">AI · 快速</option>
           <option value="default">AI · 精细（较慢）</option>
           <option value="offline">排练（不用 AI）</option>
         </select>
-        <button class="ghost" id="restart-top" type="button">重开</button>
+        <button class="pbtn" id="restart" type="button">重开</button>
       </div>
-      <span id="crew-status">正在连接 AI…</span>
+      <span id="ai-status">正在连接 AI…</span>
     </div>
   </header>
 
-  <main class="stage">
-    <div class="col-l">
-      <div class="monitor" id="monitor">
-        <canvas id="town" aria-label="晴港镇实时画面"></canvas>
-        <div class="vig"></div>
-        <div class="scan"></div>
-        <div class="osd tl" id="cam">CAM 07 · 床头闹钟摄像头</div>
-        <div class="osd tr"><i class="rec"></i>REC <span id="tc">07:30:00</span></div>
-        <div class="danmu" id="danmu"></div>
-        <div class="subtitle" id="subtitle" hidden></div>
+  <p class="alert" id="alert-esc" hidden></p>
+
+  <div class="shoot px" id="shoot" hidden aria-live="polite">
+    <span class="rec">● 拍摄中</span>
+    <span id="shoot-title"></span>
+    <span class="btns">
+      <button class="pbtn" id="skip" type="button">快进</button>
+      <button class="pbtn" id="cut" type="button" hidden>喊卡</button>
+    </span>
+    <p id="shoot-cap"></p>
+  </div>
+
+  <aside class="drawer px" id="drawer">
+    <button class="pbtn drawer-tab" id="drawer-tab" type="button" aria-expanded="false" aria-controls="drawer-body">导演笔记</button>
+    <div class="drawer-body" id="drawer-body">
+      <div class="tabs" role="tablist">
+        <button class="pbtn" type="button" role="tab" data-tab="truman" aria-selected="true">林楚</button>
+        <button class="pbtn" type="button" role="tab" data-tab="log" aria-selected="false">场记 <small id="tab-log-n"></small></button>
+        <button class="pbtn" type="button" role="tab" data-tab="clues" aria-selected="false">破绽 <small id="tab-clue-n"></small></button>
       </div>
 
-      <section class="panel console" id="console">
-        <div class="console-head">
-          <h2>导演台</h2>
-          <span class="when" id="slot-info">下一场：第 1 天 · 早上</span>
-        </div>
-
-        <div id="normal-console" class="step" style="gap:14px">
-          <div class="alert acc" id="alert-acc" hidden><span class="tag">突发</span><span id="acc-text"></span></div>
-          <div class="alert esc" id="alert-esc" hidden><span class="tag">警报</span><span id="esc-text"></span></div>
-
-          <div class="step">
-            <div class="step-k"><b>1</b>选一张事件卡</div>
-            <div class="cards" id="cards"></div>
-          </div>
-          <div class="step">
-            <div class="step-k"><b>2</b>派谁上场</div>
-            <div class="chips" id="actors"></div>
-            <p class="actor-note" id="actor-note"></p>
-          </div>
-          <div class="step">
-            <label class="step-k" for="whisper"><b>3</b>耳麦指令（可选。演员会照做……尽量）</label>
-            <div class="whisper"><span class="tag">耳麦</span><input id="whisper" maxlength="80" autocomplete="off" placeholder="例：让她不经意提起，下周要去外地出差"></div>
-          </div>
-          <div class="action">
-            <label class="sponsor" for="sponsor"><input type="checkbox" id="sponsor"><span>植入今日赞助：<b id="sp-name">晴天速溶咖啡</b> <em>+40 万</em></span></label>
-            <div class="btns">
-              <button class="ghost" id="cut" type="button" hidden>喊卡</button>
-              <button class="ghost" id="skip" type="button" hidden>快进</button>
-              <button class="go" id="go" type="button">开拍</button>
-            </div>
+      <div class="panel" role="tabpanel" data-tab="truman">
+        <dl class="now"><dt>位置</dt><dd id="t-place">家</dd><dt>正在</dt><dd id="t-act">睡觉</dd><dt>下一站</dt><dd id="t-next">—</dd><dt>打算</dt><dd id="t-intent">—</dd></dl>
+        <h3>内心 <span id="t-mind-d"></span></h3>
+        <p class="mind" id="t-mind"></p>
+        <h3>日记 <span id="t-diary-d"></span></h3>
+        <p class="diary" id="t-diary"></p>
+        <h3>今日日程</h3>
+        <ol class="sched" id="t-sched"></ol>
+        <div class="debug">
+          <h3>调试 <span>正式版没有</span></h3>
+          <label for="dbg-sus">怀疑值 <span id="dbg-sus-v">12</span>：拖高看穹顶裂开</label>
+          <input type="range" id="dbg-sus" min="0" max="100" value="12">
+          <div class="jump"><span>跳到</span>
+            <button class="pbtn" type="button" data-jump="390">06:30</button>
+            <button class="pbtn" type="button" data-jump="710">11:50</button>
+            <button class="pbtn" type="button" data-jump="1110">18:30</button>
+            <button class="pbtn" type="button" data-jump="1210">20:10</button>
           </div>
         </div>
+      </div>
 
-        <div id="finale-console" class="step" hidden>
-          <div class="alert esc"><span class="tag">最终幕</span><span>林楚站在天空尽头的那扇门前。这是你唯一一次可以直接对他说话，他会听见天上传来的声音。</span></div>
-          <label class="step-k" for="finale-words">你想对他说什么？</label>
-          <textarea id="finale-words" rows="3" maxlength="200" placeholder="例：外面的世界没有比这里更真实的东西。留下来吧，我比任何人都了解你。"></textarea>
-          <div class="action">
-            <span class="hint">他会不会留下，取决于你说的话能不能打动他。</span>
-            <div class="btns">
-              <button class="ghost" id="finale-silent" type="button">保持沉默</button>
-              <button class="go" id="finale-go" type="button">对他说话</button>
-            </div>
-          </div>
-        </div>
+      <div class="panel log" role="tabpanel" data-tab="log" id="log" hidden aria-live="polite"></div>
 
-        <div id="ended-console" class="step" hidden>
-          <p class="hint" id="ended-text">本季已经结束。</p>
-          <div class="btns"><button class="ghost" id="show-ending" type="button">查看结局</button><button class="go" id="restart-end" type="button">重新开播</button></div>
-        </div>
-
-        <p class="hint" id="hint"></p>
-      </section>
-    </div>
-
-    <div class="col-r">
-      <section class="panel mind">
-        <h2>林楚的内心 <small>只有导演听得到</small></h2>
-        <span class="stamp-d" id="mind-d"></span>
-        <blockquote id="mind"></blockquote>
-        <div class="older" id="mind-older"></div>
-        <div class="intent" id="intent-row"><span>他的打算</span><b id="intent"></b></div>
-      </section>
-      <section class="panel clues-p">
-        <h2>他注意到的破绽 <small id="clue-count">0 条</small></h2>
+      <div class="panel" role="tabpanel" data-tab="clues" hidden>
         <ul class="clues" id="clues"></ul>
-      </section>
-      <section class="panel log-p">
-        <h2>场记 <small>每一场戏的原始记录</small></h2>
-        <div class="log-body" id="log" aria-live="polite"></div>
-      </section>
+      </div>
     </div>
-  </main>
-</div>
+  </aside>
 
-<div class="overlay" id="overlay" hidden>
-  <div class="end-card" role="dialog" aria-modal="true" aria-labelledby="end-title">
-    <span class="eyebrow" id="end-eyebrow"></span>
-    <h2 id="end-title"></h2>
-    <p id="end-text"></p>
-    <dl id="end-stats"></dl>
-    <div class="btns"><button class="primary" id="restart-overlay" type="button">重新开播</button><button id="close-overlay" type="button">看看场记</button></div>
+  <div class="crt px">
+    <div class="crt-top"><span id="crt-cam">CAM</span></div>
+    <div class="crt-screen" id="crt-screen"></div>
+    <div class="crt-bot"><span class="rec">● REC</span><span id="crt-tc">06:35:00</span></div>
   </div>
+
+  <div class="cam px">
+    <button class="pbtn" id="rot-l" type="button" title="向左转（Q）" aria-label="向左转">↺</button>
+    <button class="pbtn" id="rot-r" type="button" title="向右转（E）" aria-label="向右转">↻</button>
+    <button class="pbtn" id="zoom-out" type="button" aria-label="缩小">－</button>
+    <button class="pbtn" id="zoom-in" type="button" aria-label="放大">＋</button>
+    <button class="pbtn" id="follow" type="button" aria-pressed="true" title="跟拍林楚（F）">跟拍林楚</button>
+    <button class="pbtn" id="overview" type="button">全景</button>
+  </div>
+  <p class="help">拖动平移 · 滚轮缩放 · Q/E 旋转 · 空格暂停</p>
+
+  <div class="hand">
+    <span class="hand-note" id="hand-note"></span>
+    <div class="hand-cards" id="hand-cards"></div>
+  </div>
+
+  <p class="toast" id="toast" hidden role="status"></p>
+  <div class="pop px" id="pop" role="dialog" aria-label="安排这场戏" hidden></div>
+
+  <div class="finale px" id="finale" hidden role="group" aria-labelledby="finale-title">
+    <p id="finale-title"><span class="rec">● 最终幕</span> 林楚站在穹顶的出口门前。全世界都在看。</p>
+    <label for="finale-words">这是你第一次直接对他说话。你想说什么？</label>
+    <textarea id="finale-words" rows="3" maxlength="200" placeholder="例：外面的世界没有比这里更真实的东西。留下来吧，我比任何人都了解你。"></textarea>
+    <div class="btns">
+      <button class="pbtn" id="finale-silent" type="button">保持沉默</button>
+      <button class="pbtn primary" id="finale-go" type="button">对他说话</button>
+    </div>
+  </div>
+  <div class="endbar px" id="endbar" hidden>
+    <span id="endbar-t"></span>
+    <button class="pbtn" id="endbar-show" type="button">看结局</button>
+    <button class="pbtn primary" id="endbar-restart" type="button">重新开播</button>
+  </div>
+  <div class="overlay" id="overlay" hidden>
+    <div class="end-card" role="dialog" aria-modal="true" aria-labelledby="end-title">
+      <span class="eyebrow" id="end-eyebrow"></span>
+      <div class="end-head"><span class="rank" id="end-rank" hidden></span><h2 id="end-title"></h2></div>
+      <p id="end-text"></p>
+      <dl id="end-stats"></dl>
+      <div class="btns">
+        <button class="pbtn" id="end-log" type="button">看看场记</button>
+        <button class="pbtn primary" id="end-restart" type="button">重新开播</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="loading" id="loading">搭建摄影棚…</div>
 </div>
-
 <script>
-(() => {
-'use strict';
-
-/* ---------- helpers ---------- */
-const $ = s => document.querySelector(s);
-const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-const int = v => { const n = Math.round(Number(v)); return Number.isFinite(n) ? n : 0; };
-const pick = a => a[Math.floor(Math.random() * a.length)];
-const pickN = (a, n) => a.slice().sort(() => Math.random() - .5).slice(0, n);
-const wait = ms => new Promise(r => setTimeout(r, ms));
-const fmt = n => Number(n).toLocaleString('zh-CN');
-const sgn = n => (n > 0 ? '+' : '') + n;
-const clean = (s, n) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim().slice(0, n);
-const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
-function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
-
-/* ---------- world data ---------- */
-const PLACES = ['家', '报刊亭', '保险公司', '广场', '小酒馆', '海滩', '码头', '大桥'];
-const PX = { 家: 150, 报刊亭: 350, 保险公司: 560, 广场: 770, 小酒馆: 960, 海滩: 1150, 码头: 1320, 大桥: 1480 };
-const CAMS = { 家: '床头闹钟摄像头', 报刊亭: '杂志架摄像头', 保险公司: '饮水机摄像头', 广场: '喷泉摄像头', 小酒馆: '啤酒龙头摄像头', 海滩: '救生椅摄像头', 码头: '浮标摄像头', 大桥: '路灯摄像头' };
-const SLOTS = ['早上', '下午', '晚上'];
-const SLOT_SEC = [7 * 3600 + 30 * 60, 14 * 3600, 20 * 3600];
-const CAT = { drama: '剧情', calm: '安抚', block: '阻拦' };
-const SPONSOR_PAY = 40;
-
-const CAST = {
-  林楚: { color: '#f2a541', role: '主角' },
-  苏梅: { color: '#f08fb0', role: '妻子', note: '敬业，但早就演腻了。念广告词时特别生硬。' },
-  老周: { color: '#5fc28f', role: '发小', note: '老戏骨，最会安抚林楚。私下真把他当兄弟。' },
-  林母: { color: '#b49be0', role: '妈妈', note: '爱煽情，经常记错台词。' },
-  小雨: { color: '#ef6a80', role: '初恋', note: '当年想告诉他真相，被节目组送走了。容易说漏嘴。' },
-  孙伯: { color: '#d39a68', role: '报刊亭老板', note: '小镇万事通，爱加戏，嘴碎。' },
-  林父: { color: '#9aa6b5', role: '"遇难"的父亲', note: '演技拙劣，台词总比口型慢半拍。' },
-};
-const colorOf = who => (CAST[who] && CAST[who].color) || (who === '导演' ? '#8fd3ff' : '#c9d2e3');
-
-const DECK = [
-  { id: 'promo', cat: 'drama', t: '升职加薪', d: '公司宣布林楚升任理赔组长，下个月要去外地培训。', drama: 3, risk: 1, cost: 30, place: '保险公司', actor: null,
-    fb: [['经理', '林楚，恭喜你升任理赔组长！下个月去外地培训。', ''], ['林楚', '外地？……我晕车，也晕船。', '他下意识摸了摸口袋里的旅行杂志'], ['{A}', '', '带头鼓掌，掌声整齐得有点过分']] },
-  { id: 'dog', cat: 'drama', t: '捡到一只小狗', d: '一只湿漉漉的小黄狗一路跟着林楚回家。', drama: 3, risk: 0, cost: 10, place: '广场', actor: '孙伯',
-    fb: [['旁白', '', '一只湿漉漉的小黄狗一路跟着林楚'], ['{A}', '这狗跟你有缘，就叫它"晴晴"吧！', ''], ['林楚', '你好啊，晴晴。你也一直住在这儿吗？', '他蹲下来摸了摸狗头']] },
-  { id: 'ex', cat: 'drama', t: '小雨回到晴港', d: '初恋小雨突然出现在镇上，说只待三天。', drama: 7, risk: 4, cost: 60, place: '报刊亭', actor: '小雨', lock: true,
-    fb: [['小雨', '……林楚？好久不见。', '她手里拿着一本旧旅行杂志'], ['林楚', '小雨！你不是搬去外地了吗？', '他的声音有点发抖'], ['小雨', '我只待三天。有些话……算了，改天说。', '她飞快地瞥了一眼路灯']] },
-  { id: 'father', cat: 'drama', t: '父亲"归来"', d: '当年"遇难"的父亲被渔船救起，失忆多年后回到晴港。', drama: 9, risk: 3, cost: 90, place: '码头', actor: '林父', lock: true, once: true,
-    fb: [['旁白', '', '一艘渔船靠岸，一个胡子拉碴的老人踉跄着走下来'], ['林父', '儿子……是我。', '台词比口型慢了半拍'], ['林楚', '爸？！', '他愣了两秒，冲了过去'], ['旁白', '', '背景音乐恰好在这一刻响起']] },
-  { id: 'baby', cat: 'drama', t: '想要个孩子', d: '苏梅在晚饭时突然提出要孩子。', drama: 4, risk: 1, cost: 10, place: '家', actor: '苏梅',
-    fb: [['{A}', '老公，我们要个孩子吧？', '她说这句话时，看着林楚身后的某个地方'], ['林楚', '现在？我还想……先出去走走。', ''], ['{A}', '有了孩子，哪儿都不用去啦。', '']] },
-  { id: 'lottery', cat: 'drama', t: '中了彩票', d: '林楚随手买的彩票中了二等奖，奖金刚好够一张船票。', drama: 5, risk: 2, cost: 50, place: '报刊亭', actor: '孙伯',
-    fb: [['{A}', '中了！二等奖！整整八千块！', ''], ['林楚', '八千……刚好够去云屿群岛的船票。', '他盯着彩票看了很久'], ['{A}', '呃……船票最近可不好买啊。', '他擦了擦汗']] },
-  { id: 'fight', cat: 'drama', t: '和老周吵一架', d: '老周借钱不还，两人在酒馆里吵了起来。', drama: 5, risk: 1, cost: 0, place: '小酒馆', actor: '老周',
-    fb: [['{A}', '钱下个月还你，至于吗？', '他把啤酒罐捏扁了'], ['林楚', '我不是要钱，我是觉得你最近怪怪的。', ''], ['{A}', '我？我哪儿怪了？', '他瞄了一眼吧台后面的镜子']] },
-  { id: 'reunion', cat: 'drama', t: '同学聚会', d: '高中同学聚会，有人提到了小雨的近况。', drama: 4, risk: 2, cost: 30, place: '小酒馆', actor: '老周',
-    fb: [['旁白', '', '同学聚会，所有人都在笑，笑得一模一样'], ['{A}', '对了，听说小雨在外地过得挺好。', ''], ['林楚', '你们谁有她的电话？', '屋里突然安静了两秒']] },
-  { id: 'beer', cat: 'calm', t: '老周的深夜啤酒', d: '老周拎着啤酒来找林楚，在码头边谈心。', drama: 2, risk: -3, cost: 10, place: '码头', actor: '老周',
-    fb: [['{A}', '来，喝一口。', '他递过一罐啤酒'], ['{A}', '兄弟，我这辈子最不会做的事，就是骗你。', '这句他念得很真诚'], ['林楚', '……谢了，老周。', '他靠在栏杆上看海']] },
-  { id: 'album', cat: 'calm', t: '妈妈翻出老相册', d: '林母拿出一本"全家福"相册，讲他小时候的事。', drama: 3, risk: -2, cost: 10, place: '家', actor: '林母',
-    fb: [['{A}', '你看这张，你小时候在海边……哦不，在公园。', '她慌忙翻到下一页'], ['林楚', '这张照片里的我，怎么跟我记得的不太一样？', ''], ['{A}', '人老了，记性都会变的嘛。', '']] },
-  { id: 'dinner', cat: 'calm', t: '烛光晚餐', d: '苏梅精心准备了结婚纪念日晚餐。', drama: 2, risk: -2, cost: 20, place: '家', actor: '苏梅',
-    fb: [['旁白', '', '餐桌上点着蜡烛，摆着他最爱的红烧肉'], ['{A}', '纪念日快乐，亲爱的。', ''], ['林楚', '谢谢你。好像什么都不缺了。', '他笑了，又看了一眼窗外']] },
-  { id: 'routine', cat: 'calm', t: '平凡的一天', d: '什么也不安排，让林楚自己过。观众可能会无聊。', drama: 1, risk: -1, cost: 0, place: null, actor: null, always: true,
-    fb: [['旁白', '', '林楚一个人在镇上闲逛，什么也没发生'], ['林楚', '今天天气真好……跟昨天一样好。', '他抬头看了看天'], ['旁白', '', '群演们按路线来回走着']] },
-  { id: 'shark', cat: 'block', t: '鲨鱼出没', d: '电台紧急播报：近海发现鲨鱼，所有船只禁止出海。', drama: 2, risk: 1, cost: 20, place: '码头', actor: '孙伯',
-    fb: [['旁白', '', '码头的喇叭响了：近海发现鲨鱼，禁止出海'], ['{A}', '听见没？鲨鱼！这么大！', '他张开双臂比划'], ['林楚', '晴港什么时候有过鲨鱼？', '']] },
-  { id: 'traffic', cat: 'block', t: '全城大堵车', d: '通往大桥的路上突然堵满了车。', drama: 3, risk: 2, cost: 30, place: '大桥', actor: null,
-    fb: [['旁白', '', '通往大桥的路上，几十辆车突然一起堵住了'], ['林楚', '奇怪，镇上哪来这么多车？', '他敲了敲一辆车的车窗'], ['旁白', '', '司机目视前方，一动不动']] },
-  { id: 'travel', cat: 'block', t: '车票全部售罄', d: '车站说未来一个月，所有出镇的票都卖完了。', drama: 2, risk: 2, cost: 10, place: '广场', actor: '孙伯',
-    fb: [['{A}', '出镇的票？卖完啦，一个月都没有。', ''], ['林楚', '一张都没有？', '他盯着墙上的宣传画'], ['旁白', '', '宣传画上写着：外面的世界很危险，晴港最安全']] },
-  { id: 'sick', cat: 'block', t: '妈妈病倒了', d: '林母突然"晕倒"，需要人照顾。', drama: 4, risk: 1, cost: 20, place: '家', actor: '林母',
-    fb: [['{A}', '哎哟……我头晕……', '她倒下前特意找了个软的地方'], ['林楚', '妈！你别吓我！', '他一把扶住她'], ['{A}', '儿子，你哪儿也别去，陪着妈。', '']] },
-  { id: 'storm', cat: 'block', t: '人造暴风雨', d: '调动气象组，在海上造一场暴风雨。', drama: 8, risk: 4, cost: 80, place: '码头', actor: null,
-    fb: [['旁白', '', '天空瞬间变黑，海面掀起巨浪'], ['林楚', '刚才还是晴天……', '他死死抓住栏杆'], ['旁白', '', '暴雨只下在海面这一小片，镇上依旧阳光灿烂']] },
-];
-const CARD = Object.fromEntries(DECK.map(c => [c.id, c]));
-
-const ACCIDENTS = [
-  { id: 'light', t: '一盏聚光灯从天上掉下来，摔在林楚脚边，灯上贴着"7号灯"的标签', short: '天上掉下一盏灯', react: '这……是从天上掉下来的？' },
-  { id: 'rain', t: '人工降雨故障：雨只下在林楚头顶一小块，他走到哪雨跟到哪', short: '雨只下在他头上', react: '为什么只有我头上在下雨？' },
-  { id: 'radio', t: '林楚的收音机串台，传出导演组的对讲："目标正在向东移动……"', short: '收音机串台', react: '收音机里说的"目标"……是我？' },
-  { id: 'stroller', t: '同一个群演推着同一辆婴儿车，在他面前第三次经过', short: '同一辆婴儿车经过三次', react: '这辆婴儿车，我今天见第三次了。' },
-  { id: 'door', t: '一扇布景门没关好，林楚瞥见门后是化妆间和一桌盒饭', short: '布景门后露出化妆间', react: '那扇门后面……是盒饭？' },
-  { id: 'sun', t: '天上的"太阳"闪了两下，熄灭了半秒', short: '太阳闪了一下', react: '太阳……刚刚是不是眨了一下？' },
-];
-const ACC = Object.fromEntries(ACCIDENTS.map(a => [a.id, a]));
-
-const SPONSORS = [
-  { n: '晴天速溶咖啡', s: '晴天咖啡，一口唤醒好心情！' },
-  { n: '蓝鲸牌割草机', s: '蓝鲸割草机，安静得像没开机。' },
-  { n: '椰岛椰子水', s: '椰岛椰子水，喝一口就像去了海岛。' },
-  { n: '安居牌防水漆', s: '安居防水漆，刷一次管十年。' },
-  { n: '小麦先生切片面包', s: '小麦先生，每一片都刚刚好。' },
-  { n: '稳稳牌晕车贴', s: '稳稳晕车贴，哪儿也不用去，也不会晕。' },
-  { n: '海风牌除湿机', s: '海风除湿机，让家永远干爽。' },
-];
-const sponsorToday = () => SPONSORS[(state.day - 1) % SPONSORS.length];
-
-const MINDS = [
-  ['又是晴天。晴港好像从来没下过一场像样的雨。日子平静得像一杯温水。', '有时候我会想，要是小时候没那么怕水，我现在会不会在世界的另一头？', '大家都对我很好。好得……让我有点不好意思。'],
-  ['今天的事有点太巧了。不过巧合每天都在发生，对吧？', '我总觉得有人在看着我。大概是最近太累了。', '为什么每次我想出门，就会冒出点什么事？'],
-  ['明天我要走一条从来没走过的路，看看会发生什么。', '他们的笑容都太准时了，像排练过一样。', '如果这一切都是假的，那苏梅呢？老周呢？我呢？'],
-  ['我必须离开晴港。不管桥那头是什么，我都要亲眼看看。', '我不怕水了。就算是海，也挡不住我。', '如果真的有人在看——那你们就好好看着吧。'],
-];
-const INTENTS = [
-  ['下班后去报刊亭看看旅行杂志', '周末带苏梅去海边散步', '攒钱，以后去一次云屿群岛'],
-  ['留意街上那些人的路线', '找老周聊聊最近的怪事', '打听小雨现在在哪'],
-  ['走一条从没走过的路', '偷偷研究镇上的地图', '试试能不能买到出镇的车票'],
-  ['开车冲过大桥', '偷一条船，开到海的尽头', '离开晴港'],
-];
-const DANMU = ['第一次看直播，楚哥好帅', '这广告也太硬了哈哈哈', '苏梅姐演技退步了', '小雨我的女神！！', '他是不是发现了？？', '导演你在干嘛', '楚哥早上好！', '鲨鱼？？认真的吗', '比我上班还无聊', '前方高能', '老周永远的神', '晴晴好可爱', '救命这台词', '我赌他明天去码头', '楚门……啊不，林楚', '这雨是在跟拍吗', '打卡第一万多天', '孙伯又加戏了', '求求别让他走', '让他走吧！自由！', '有点心疼他', '门后面是盒饭笑死', '收视冲啊', '妈妈的演技好假'];
-const level = s => (s < 30 ? 0 : s < 60 ? 1 : s < 85 ? 2 : 3);
-
-/* ---------- AI prompts ---------- */
-const BIBLE = `【世界设定】
-主角林楚，33岁，在海边小镇"晴港"出生长大，从没离开过。他不知道：晴港是一座巨型穹顶摄影棚，天空是画出来的，太阳是一盏灯，镇上所有人都是演员，全世界在24小时直播他的人生，已经播了一万多天。
-林楚是晴港海湾保险公司的理赔员。7岁那年父亲在海上"遇难"，从此他怕水。他一直梦想去南方的云屿群岛，常在报刊亭翻旅行杂志；忘不了大学时的初恋小雨，她当年突然"随家人搬走"了。性格温和、幽默、有礼貌，骨子里好奇，一旦起疑会刨根问底。
-演员表（括号里是演员的私心，林楚不知道）：
-- 苏梅：林楚的妻子，护士。（敬业，但早就厌倦了这份工作；念植入广告时特别生硬）
-- 老周：林楚从小到大的好兄弟。（老戏骨，即兴能力最强，最会安抚林楚；其实真把他当兄弟）
-- 林母：林楚的妈妈。（爱煽情，常记错台词）
-- 小雨：林楚的初恋。（当年想告诉他真相，被节目组送走；一直同情他，容易说漏嘴）
-- 孙伯：报刊亭老板，小镇万事通。（爱加戏，嘴碎）
-- 林父：林楚"遇难"的父亲。（只在"父亲归来"之后出现，演技拙劣）
-地点：家、报刊亭、保险公司、广场、小酒馆、海滩、码头、大桥（大桥是离开晴港的唯一道路）。`;
-
-const RULES = `【写作要求】
-写一场5到8个镜头的短戏。林楚是有自由意志的真人，反应要真实、具体、带点幽默，不一定按导演的剧本走。怀疑值越高他越敏感：30以上会留意巧合，60以上会主动试探（突然改路线、盯着人追问），85以上一心想离开晴港。演员会犯错、加戏、露马脚。
-delta是这场戏后怀疑值的变化：平淡温馨的戏-8到+2；有明显巧合或广告念得生硬+3到+10；舞台事故、演员说漏嘴+10到+25；真诚有效的安抚-5到-12。
-drama是观众觉得这场戏多好看（1到10）：平淡1到3，有冲突或感情5到7，大事件或事故8到10。
-【输出格式】只输出若干行，每行一个完整的JSON对象，不要代码块，不要任何别的文字：
-第1行：{"k":"scene","place":"从这些地点里选一个：家/报刊亭/保险公司/广场/小酒馆/海滩/码头/大桥","cam":"这场用的隐藏摄像头，比如纽扣摄像头、路灯摄像头、后视镜摄像头"}
-接着5到8行：{"k":"beat","who":"林楚、演员名、群演或旁白","say":"台词，没有就填空字符串","act":"动作或画面，没有就填空字符串"}
-接着1行：{"k":"mind","text":"林楚此刻的内心独白，第一人称，40到90字"}
-最后1行：{"k":"end","delta":整数,"drama":整数,"noticed":"他这场新注意到的破绽，没有就填空字符串","intent":"他接下来想做什么，15字以内","escape":布尔值（他现在是否打算离开晴港）,"memo":"从林楚的视角一句话总结这场戏，30字以内","actor_note":"演员的失误或私心，没有就填空字符串","danmu":["4到6条观众弹幕，网络口吻，每条15字以内"]}
-每条台词和动作都不超过40个字。全部用简体中文。`;
-
-function riskHint(r) {
-  return r <= -2 ? '这是安抚戏，演得好能明显降低怀疑' : r < 0 ? '偏温和，略能降低怀疑' : r === 0 ? '很安全' : r <= 2 ? '有点巧合，可能引起注意' : '风险很高，很容易露馅';
-}
-
-function stateBlock(day, slot) {
-  const L = [];
-  L.push(`【当前状态】第${day}天·${SLOTS[slot]}。林楚的怀疑值 ${state.suspicion}/100（0=深信不疑，100=确信世界是假的）。`);
-  L.push(`林楚的打算：${state.intent || '无'}`);
-  L.push(`他之前注意到的破绽：${state.clues.slice(-6).map(c => c.t).join('；') || '暂无'}`);
-  L.push(`最近发生的事：${state.memos.slice(-6).join('；') || '这是第一场戏'}`);
-  return L.join('\n');
-}
-
-function buildPrompt(ctx) {
-  const L = ['你是互动游戏《真实人生》的剧情引擎。玩家扮演一档24小时直播真人秀的导演，你负责根据导演的安排写出这一场戏。', BIBLE, stateBlock(ctx.day, ctx.slot)];
-  if (ctx.escapeBefore) {
-    L.push(ctx.card.cat === 'block'
-      ? '注意：林楚上一场决定离开晴港，导演这一场用阻拦事件拦他。他可能被拦住，也可能因此更起疑。'
-      : '注意：林楚上一场决定离开晴港，导演这一场没有阻拦。描写他朝大桥或码头前进，离出口更近了。');
-  }
-  L.push('【导演对这场戏的安排】');
-  L.push(`事件：${ctx.card.t}——${ctx.card.d}`);
-  L.push(`派出演员：${ctx.actor ? `${ctx.actor}（${CAST[ctx.actor].role}）` : '无，只有群演'}`);
-  L.push(`耳麦指令：${ctx.whisper ? `「${ctx.whisper}」（导演悄悄告诉演员的话。演员会尽力执行，但可能演得生硬，或按自己的私心发挥）` : '无'}`);
-  L.push(`植入广告：${ctx.sponsor ? `${ctx.sponsor.n}，广告词「${ctx.sponsor.s}」。演员必须在戏里生硬地念出来，这是笑点。` : '无'}`);
-  L.push(`突发舞台事故：${ctx.accident ? `${ctx.accident.t}（演员们得临场圆过去）` : '无'}`);
-  L.push(`本场事件的风险提示：${riskHint(ctx.card.risk)}`);
-  L.push(RULES);
-  return L.join('\n');
-}
-
-function buildFinalePrompt(words) {
-  return ['你是互动游戏《真实人生》的剧情引擎。现在是全剧的最终幕。', BIBLE, stateBlock(state.day, state.slot),
-    `【最终幕】林楚已经确信世界是假的。他一路来到晴港的尽头：大桥的尽头是一面画着蓝天白云的墙，墙上有一扇写着"出口"的小门。全世界的观众都屏住了呼吸。`,
-    `导演第一次用天空中的声音对他说话：${words ? `「${words}」` : '（导演选择了沉默，一句话也没说）'}`,
-    '写这场最终的戏，3到6个镜头。不要重复导演的原话，从林楚的反应开始写。然后决定他是否留下：只有导演的话真诚、尊重他、真正打动了他，他才可能留下；大多数情况下他会离开。',
-    '【输出格式】只输出若干行，每行一个完整的JSON对象，不要代码块，不要任何别的文字：',
-    '3到6行：{"k":"beat","who":"林楚、导演或旁白","say":"台词，没有就填空字符串","act":"动作或画面，没有就填空字符串"}',
-    '最后1行：{"k":"end","stay":布尔值,"last":"林楚在门前说的最后一句话，30字以内","danmu":["4到6条观众弹幕"]}',
-    '全部用简体中文。'].join('\n');
-}
-
-/* ---------- state ---------- */
-const SAVE_KEY = 'truelife.v1';
-let state = null;
-let sample = null, sampleChecked = false, aiBlocked = false, aiBlockedWhy = '';
-let busy = false, inFlight = false, skipFast = false, ctl = null, takeTok = 0, tcStart = performance.now();
-
-function newGame(crew) {
-  return {
-    v: 1, day: 1, slot: 0, showDay: 12410, take: 0,
-    suspicion: 12, ratings: 820, hist: [742, 768, 790, 805, 820], dayRatings: [], total: 0, lowStreak: 0, lastCat: null,
-    budget: 300, intent: '下班后去报刊亭，看看新到的旅行杂志',
-    clues: [], memos: ['第1天早上：对着镜子练习问去云屿群岛的船几点开'],
-    minds: [{ d: '第 1 天 · 早上', text: '又是晴天。晴港好像从来没下过一场像样的雨。有时候我觉得，整个镇子都在等我出门。' }],
-    log: [
-      { k: 'day', text: '第 1 天' },
-      { k: 'take', n: 0, day: 1, slot: 0, place: '家', title: '平凡的早晨' },
-      { k: 'beat', who: '旁白', say: '', act: '闹钟响了。林楚对着浴室镜子，练习一句永远用不上的外地话。' },
-      { k: 'beat', who: '林楚', say: '请问，去云屿群岛的船，几点开？', act: '' },
-      { k: 'beat', who: '苏梅', say: '老公，早饭好了！今天也要平平安安的哦。', act: '她对着厨房的某个角落微笑' },
-      { k: 'beat', who: '林楚', say: '放心，今天的计划是：上班，下班，回家。', act: '' },
-      { k: 'sys', text: '今日赞助商：晴天速溶咖啡。选一张事件卡，派演员上场，然后开拍。' },
-    ],
-    hand: ['promo', 'dog', 'ex', 'routine'],
-    sel: { card: 'promo', actor: null, whisper: '', sponsor: false },
-    used: [], flags: { yu: false, dad: false },
-    pendingEscape: false, accident: null, finale: false, ended: null,
-    crew: crew || 'quick',
-  };
-}
-function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) { /* storage unavailable */ } }
-function load() { try { const s = JSON.parse(localStorage.getItem(SAVE_KEY)); if (s && s.v === 1 && Array.isArray(s.log)) return s; } catch (e) { /* ignore */ } return null; }
-function pushLog(entry) { state.log.push(entry); if (state.log.length > 220) state.log.splice(0, 60); }
-
-const actorAvailable = name => name === '小雨' ? state.flags.yu : name === '林父' ? state.flags.dad : !!CAST[name];
-
-function effectiveMode() {
-  if (state.crew === 'offline' || aiBlocked || !sample) return 'offline';
-  return state.crew === 'default' ? 'default' : 'quick';
-}
-
-/* ---------- deck ---------- */
-function deal() {
-  const pool = DECK.filter(c => !c.always && !(c.once && state.used.includes(c.id)) && !(c.id === 'ex' && state.flags.yu));
-  let hand = pickN(pool, 3);
-  if (state.pendingEscape && !hand.some(c => c.cat === 'block')) {
-    const blocks = pool.filter(c => c.cat === 'block');
-    hand[2] = pick(blocks);
-  }
-  state.hand = [...new Set(hand.map(c => c.id))].concat('routine');
-  selectCard(state.hand[0], true);
-}
-function rollAccident() {
-  state.accident = Math.random() < (state.day === 1 ? 0.12 : 0.2) ? pick(ACCIDENTS).id : null;
-}
-
-/* ---------- view (canvas) ---------- */
-const view = {
-  tr: { x: 150, tx: 150, ph: 0 }, cast: {}, speaker: null,
-  zoom: 1, tz: 1, camX: 800, camY: 450, place: '家', slot: 0,
-  acc: null, accT0: 0, finale: false, leaving: false,
-  extras: [
-    { x: 260, tx: 480, ph: 0, sp: 55, c: '#9fb7d9', wait: 0 },
-    { x: 640, tx: 300, ph: 1, sp: 48, c: '#e3c37a', wait: 1 },
-    { x: 880, tx: 1000, ph: 2, sp: 60, c: '#c7a7d8', wait: 0 },
-    { x: 460, tx: 820, ph: 3, sp: 52, c: '#9fd1c5', wait: 2 },
-  ],
-  clouds: [{ x: 160, y: 120, s: 1 }, { x: 560, y: 70, s: .8 }, { x: 980, y: 150, s: 1.15 }, { x: 1380, y: 95, s: .9 }],
-};
-function addCast(name) {
-  if (!CAST[name] || name === '林楚' || view.cast[name]) return;
-  const n = Object.keys(view.cast).length;
-  const side = n % 2 === 0 ? 1 : -1;
-  const off = 72 + Math.floor(n / 2) * 58;
-  const base = PX[view.place] || view.tr.tx;
-  const tx = clamp(base + side * off, 30, view.finale ? 1520 : 1570);
-  view.cast[name] = { x: clamp(tx + side * 420, -60, 1660), tx, ph: 0 };
-}
-
-const cv = $('#town');
-const g = cv.getContext('2d');
-const CF = '"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif';
-let CW = 1, CH = 1;
-function resize() {
-  const r = cv.getBoundingClientRect();
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  CW = Math.max(1, Math.round(r.width * dpr));
-  CH = Math.max(1, Math.round(r.width * 9 / 16 * dpr));
-  cv.width = CW; cv.height = CH;
-}
-new ResizeObserver(resize).observe(cv);
-resize();
-
-const SKY = [
-  { top: '#93d0ee', bot: '#fde4c8', sea1: '#6cb7d8', sea2: '#3a86b4', sun: '#fff2c0', sp: [300, 300], lawn: '#c4e6c1', lawn2: '#acd8a8' },
-  { top: '#5fb6e8', bot: '#d3edf8', sea1: '#5aaed8', sea2: '#2f78ab', sun: '#fffbe8', sp: [820, 140], lawn: '#c4e6c1', lawn2: '#acd8a8' },
-  { top: '#2f366f', bot: '#f2a47e', sea1: '#5476a6', sea2: '#26385f', sun: '#ffb070', sp: [1230, 470], lawn: '#a9c7ae', lawn2: '#93b79a' },
-];
-
-function groundY(x) {
-  if (x <= 1215) return 742;
-  if (x < 1285) return 742 - (x - 1215) / 70 * 72;
-  if (x <= 1392) return 670;
-  if (x < 1430) return 670 - (x - 1392) / 38 * 40;
-  return 630;
-}
-function step(p, dt, speed) {
-  const d = p.tx - p.x;
-  if (Math.abs(d) < 1) { p.x = p.tx; p.walking = false; return; }
-  p.x += Math.sign(d) * Math.min(Math.abs(d), speed * dt);
-  p.walking = true; p.ph += dt * 11;
-}
-function rr(x, y, w, h, r) { g.beginPath(); if (g.roundRect) g.roundRect(x, y, w, h, r); else g.rect(x, y, w, h); }
-function circle(x, y, r) { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); }
-function ellipse(x, y, rx, ry) { g.beginPath(); g.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2); g.fill(); }
-
-function update(dt, now) {
-  if (REDUCED) {
-    view.tr.x = view.tr.tx; for (const k in view.cast) view.cast[k].x = view.cast[k].tx;
-  } else {
-    step(view.tr, dt, 360);
-    for (const k in view.cast) step(view.cast[k], dt, 320);
-  }
-  const stroller = view.acc === 'stroller';
-  view.extras.forEach((e, i) => {
-    if (i === 0) e.stroller = stroller;
-    if (e.wait > 0) { e.wait -= dt; e.walking = false; return; }
-    step(e, dt, e.stroller ? 150 : e.sp);
-    if (!e.walking) {
-      if (e.stroller) { e.tx = clamp(view.tr.x + (e.x < view.tr.x ? 260 : -260), 20, 1040); e.wait = .2; }
-      else { e.tx = 40 + Math.random() * 1000; e.wait = 1 + Math.random() * 3; }
-    }
-    if (REDUCED) e.x = e.tx;
-  });
-  if (!REDUCED) for (const c of view.clouds) { c.x += dt * 9 * c.s; if (c.x > 1720) c.x = -120; }
-  const tx = view.finale ? 1470 : view.tz > 1 ? view.tr.x : 800;
-  const ty = view.finale ? 560 : view.tz > 1 ? 600 : 450;
-  const tz = view.finale ? 1.9 : view.tz;
-  const k = REDUCED ? 1 : Math.min(1, dt * 2.6);
-  view.zoom += (tz - view.zoom) * k; view.camX += (tx - view.camX) * k; view.camY += (ty - view.camY) * k;
-}
-
-function drawSky(sk, now) {
-  const gr = g.createLinearGradient(0, 0, 0, 520);
-  gr.addColorStop(0, sk.top); gr.addColorStop(1, sk.bot);
-  g.fillStyle = gr; g.fillRect(0, 0, 1600, 520);
-  // the painted dome: grid seams grow visible as he grows suspicious
-  const a = 0.025 + Math.pow(state.suspicion / 100, 1.4) * 0.36;
-  g.save(); g.beginPath(); g.rect(0, 0, 1600, 520); g.clip();
-  g.strokeStyle = `rgba(255,255,255,${a.toFixed(3)})`; g.lineWidth = 1.4;
-  for (let i = 1; i <= 8; i++) { const y = i * 62; g.beginPath(); g.moveTo(0, y + i * 6); g.quadraticCurveTo(800, y - 34, 1600, y + i * 6); g.stroke(); }
-  for (let k = 0; k <= 16; k++) { const x = k * 100; g.beginPath(); g.moveTo(x, 0); g.quadraticCurveTo(800 + (x - 800) * 1.12, 260, 800 + (x - 800) * 1.28, 520); g.stroke(); }
-  // sun (a lamp)
-  let sa = 1;
-  if (view.acc === 'sun') sa = Math.floor(now / 160) % 6 === 0 ? 0.08 : 1;
-  const [sx, sy] = sk.sp;
-  g.globalAlpha = sa;
-  const sg = g.createRadialGradient(sx, sy, 30, sx, sy, 130);
-  sg.addColorStop(0, sk.sun); sg.addColorStop(1, 'rgba(255,255,255,0)');
-  g.fillStyle = sg; circle(sx, sy, 130);
-  g.fillStyle = sk.sun; circle(sx, sy, 40);
-  g.globalAlpha = 1;
-  // clouds
-  g.fillStyle = view.slot === 2 ? 'rgba(255,205,205,.62)' : 'rgba(255,255,255,.88)';
-  for (const c of view.clouds) { const s = c.s; ellipse(c.x, c.y, 52 * s, 20 * s); ellipse(c.x - 34 * s, c.y + 6 * s, 34 * s, 15 * s); ellipse(c.x + 30 * s, c.y - 10 * s, 36 * s, 18 * s); }
-  g.restore();
-}
-
-function drawSea(sk, now) {
-  const gr = g.createLinearGradient(0, 520, 0, 900);
-  gr.addColorStop(0, sk.sea1); gr.addColorStop(1, sk.sea2);
-  g.fillStyle = gr; g.fillRect(0, 520, 1600, 380);
-  // the islands he dreams of, painted on the far wall
-  g.fillStyle = 'rgba(110,160,190,.55)';
-  ellipse(1210, 522, 44, 9); ellipse(1262, 523, 26, 6); ellipse(1300, 522, 16, 4);
-  g.strokeStyle = 'rgba(255,255,255,.35)'; g.lineWidth = 2;
-  const off = REDUCED ? 0 : (now / 60) % 80;
-  for (let r = 0; r < 6; r++) {
-    const y = 560 + r * 55;
-    for (let x = -80 + ((r % 2) * 40) + off; x < 1600; x += 160) {
-      g.beginPath(); g.moveTo(x, y); g.quadraticCurveTo(x + 14, y - 6, x + 28, y); g.stroke();
-    }
-  }
-}
-
-function drawLand(sk) {
-  g.fillStyle = sk.lawn; g.fillRect(0, 590, 1062, 310);
-  g.fillStyle = '#efdcae';
-  g.beginPath(); g.moveTo(1060, 590); g.lineTo(1170, 598); g.lineTo(1300, 770); g.lineTo(1300, 900); g.lineTo(1060, 900); g.closePath(); g.fill();
-  g.fillStyle = 'rgba(255,255,255,.45)';
-  g.beginPath(); g.moveTo(1170, 598); g.lineTo(1300, 770); g.lineTo(1292, 772); g.lineTo(1164, 601); g.closePath(); g.fill();
-  g.fillStyle = '#d9d3c5'; g.fillRect(0, 700, 1060, 66);
-  g.fillStyle = '#c5bfb1'; g.fillRect(0, 700, 1060, 5);
-  g.fillStyle = 'rgba(255,255,255,.75)';
-  for (let x = 20; x < 1050; x += 60) g.fillRect(x, 731, 30, 3);
-  g.fillStyle = sk.lawn2; g.fillRect(0, 766, 1060, 134);
-}
-
-function drawHome(x, lit) {
-  const w = 170, h = 120, l = x - w / 2, b = 700;
-  g.fillStyle = '#f5c3bc'; g.fillRect(l, b - h, w, h);
-  g.fillStyle = '#d9787a'; g.beginPath(); g.moveTo(l - 14, b - h); g.lineTo(x, b - h - 70); g.lineTo(l + w + 14, b - h); g.closePath(); g.fill();
-  g.fillStyle = '#8a5a44'; g.fillRect(x - 15, b - 54, 30, 54);
-  g.fillStyle = lit ? '#ffd98a' : '#e3f3fb'; g.fillRect(l + 18, b - 94, 38, 30); g.fillRect(l + w - 56, b - 94, 38, 30);
-  g.strokeStyle = '#ffffff'; g.lineWidth = 3; g.strokeRect(l + 18, b - 94, 38, 30); g.strokeRect(l + w - 56, b - 94, 38, 30);
-  g.fillStyle = '#ffffff'; for (let i = l - 40; i < l + w + 40; i += 13) { if (Math.abs(i - x) < 24) continue; g.fillRect(i, b - 22, 5, 22); }
-  g.fillRect(l - 40, b - 15, w + 80, 3);
-}
-function drawKiosk(x) {
-  const w = 118, h = 96, l = x - w / 2, b = 700;
-  g.fillStyle = '#a6dccb'; g.fillRect(l, b - h, w, h);
-  const sw = (w + 16) / 6;
-  for (let i = 0; i < 6; i++) { g.fillStyle = i % 2 ? '#ffffff' : '#e4576e'; g.fillRect(l - 8 + i * sw, b - h - 22, sw + .5, 22); g.beginPath(); g.arc(l - 8 + i * sw + sw / 2, b - h, sw / 2, 0, Math.PI); g.fill(); }
-  const cols = ['#f2a541', '#8fd3ff', '#e4576e', '#7cc58f', '#b49be0'];
-  for (let i = 0; i < 5; i++) { g.fillStyle = cols[i]; g.fillRect(l + 11 + i * 20, b - h + 22, 15, 22); }
-  g.fillStyle = '#6f8f86'; g.fillRect(l - 4, b - 44, w + 8, 8);
-  g.fillStyle = '#2b3a55'; g.font = `700 15px ${CF}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('旅行杂志', x, b - 20);
-}
-function drawOffice(x, lit) {
-  const w = 180, h = 230, l = x - w / 2, b = 700;
-  g.fillStyle = '#f4e2a3'; g.fillRect(l, b - h, w, h);
-  g.fillStyle = '#2f5d8a'; g.fillRect(l, b - h, w, 30);
-  g.fillStyle = '#ffffff'; g.font = `700 17px ${CF}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('海湾保险', x, b - h + 15);
-  for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) { g.fillStyle = lit && (r + c) % 3 === 0 ? '#ffd98a' : '#dcefff'; g.fillRect(l + 18 + c * 40, b - h + 46 + r * 42, 26, 28); }
-  g.fillStyle = '#bfe0f2'; g.fillRect(x - 22, b - 52, 44, 52);
-  g.strokeStyle = '#2f5d8a'; g.lineWidth = 3; g.strokeRect(x - 22, b - 52, 44, 52);
-}
-function drawPlaza(x) {
-  g.fillStyle = '#8b6a4f'; g.fillRect(x - 76, 610, 12, 90);
-  g.fillStyle = '#7cc58f'; circle(x - 70, 596, 40); circle(x - 98, 618, 28); circle(x - 44, 620, 30);
-  g.fillStyle = '#d7eef6'; ellipse(x + 30, 694, 54, 12);
-  g.fillStyle = '#9fd3ea'; ellipse(x + 30, 690, 44, 8);
-  g.strokeStyle = 'rgba(190,232,250,.95)'; g.lineWidth = 3;
-  g.beginPath(); g.moveTo(x + 30, 688); g.quadraticCurveTo(x + 30, 640, x + 6, 668); g.moveTo(x + 30, 688); g.quadraticCurveTo(x + 30, 640, x + 54, 668); g.stroke();
-  g.fillStyle = '#55627a'; g.fillRect(x + 97, 610, 6, 90);
-  g.fillStyle = '#ffffff'; circle(x + 100, 600, 17);
-  g.strokeStyle = '#55627a'; g.lineWidth = 2; g.beginPath(); g.arc(x + 100, 600, 17, 0, Math.PI * 2); g.stroke();
-  const sec = SLOT_SEC[view.slot]; const hr = (sec / 3600) % 12, mn = (sec / 60) % 60;
-  g.beginPath(); g.moveTo(x + 100, 600); g.lineTo(x + 100 + Math.sin(hr / 12 * Math.PI * 2) * 9, 600 - Math.cos(hr / 12 * Math.PI * 2) * 9);
-  g.moveTo(x + 100, 600); g.lineTo(x + 100 + Math.sin(mn / 60 * Math.PI * 2) * 13, 600 - Math.cos(mn / 60 * Math.PI * 2) * 13); g.stroke();
-}
-function drawTavern(x) {
-  const w = 160, h = 130, l = x - w / 2, b = 700;
-  g.fillStyle = '#cdb9e7'; g.fillRect(l, b - h, w, h);
-  g.fillStyle = '#a48bcb'; g.fillRect(l - 6, b - h - 12, w + 12, 14);
-  g.fillStyle = '#ffd98a'; g.fillRect(l + 16, b - 92, 62, 42);
-  g.strokeStyle = '#ffffff'; g.lineWidth = 3; g.strokeRect(l + 16, b - 92, 62, 42);
-  g.fillStyle = '#6b4a6e'; g.fillRect(l + w - 52, b - 64, 34, 64);
-  g.fillStyle = '#3b3542'; rr(x - 36, b - h - 48, 72, 26, 4); g.fill();
-  g.fillStyle = '#ffd98a'; g.font = `700 15px ${CF}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('小酒馆', x, b - h - 35);
-}
-function drawBeach(x) {
-  g.strokeStyle = '#7a6552'; g.lineWidth = 4; g.beginPath(); g.moveTo(x - 46, 614); g.lineTo(x - 38, 724); g.stroke();
-  for (let i = 0; i < 6; i++) { g.fillStyle = i % 2 ? '#ffffff' : '#ff93b6'; g.beginPath(); g.moveTo(x - 46, 614); g.arc(x - 46, 618, 58, Math.PI + i * Math.PI / 6, Math.PI + (i + 1) * Math.PI / 6); g.closePath(); g.fill(); }
-  g.fillStyle = '#8fd3ff'; g.save(); g.translate(x + 20, 722); g.rotate(-.06); g.fillRect(-34, -6, 68, 12); g.restore();
-  g.strokeStyle = '#ffffff'; g.lineWidth = 4; g.beginPath(); g.moveTo(x + 70, 726); g.lineTo(x + 80, 660); g.moveTo(x + 100, 726); g.lineTo(x + 90, 660); g.moveTo(x + 72, 690); g.lineTo(x + 98, 690); g.stroke();
-  g.fillStyle = '#e4576e'; g.fillRect(x + 74, 650, 22, 10);
-}
-function drawPier() {
-  g.fillStyle = '#9b7350';
-  for (let x = 1236; x <= 1392; x += 30) g.fillRect(x, 672, 7, 110);
-  g.fillStyle = '#b9875a'; g.fillRect(1222, 668, 178, 10);
-  // the boat
-  g.fillStyle = '#ffffff'; g.beginPath(); g.moveTo(1290, 724); g.lineTo(1384, 724); g.lineTo(1370, 748); g.lineTo(1302, 748); g.closePath(); g.fill();
-  g.fillStyle = '#e4576e'; g.fillRect(1300, 734, 76, 4);
-  g.strokeStyle = '#7a6552'; g.lineWidth = 3; g.beginPath(); g.moveTo(1336, 724); g.lineTo(1336, 682); g.stroke();
-  g.fillStyle = '#f3ead3'; g.beginPath(); g.moveTo(1338, 684); g.lineTo(1366, 716); g.lineTo(1338, 716); g.closePath(); g.fill();
-}
-function drawBridge(now) {
-  g.fillStyle = '#aab6c4';
-  for (const px of [1440, 1540]) g.fillRect(px - 8, 640, 16, 260);
-  g.strokeStyle = '#aab6c4'; g.lineWidth = 6;
-  g.beginPath(); g.moveTo(1390, 700); g.quadraticCurveTo(1490, 600, 1600, 700); g.stroke();
-  g.fillStyle = '#cfd8e3'; g.fillRect(1386, 632, 214, 11);
-  g.strokeStyle = '#e8edf3'; g.lineWidth = 2;
-  g.beginPath(); g.moveTo(1392, 612); g.lineTo(1600, 612); g.stroke();
-  for (let x = 1400; x < 1600; x += 20) { g.beginPath(); g.moveTo(x, 612); g.lineTo(x, 632); g.stroke(); }
-  g.fillStyle = '#2f5d8a'; g.fillRect(1404, 586, 54, 20);
-  g.fillStyle = '#ffffff'; g.font = `700 12px ${CF}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('出镇 →', 1431, 596);
-  if (!view.finale) {
-    const fg = g.createLinearGradient(1470, 0, 1600, 0);
-    fg.addColorStop(0, 'rgba(240,246,252,0)'); fg.addColorStop(1, 'rgba(240,246,252,.75)');
-    g.fillStyle = fg; g.fillRect(1470, 470, 130, 430);
-  }
-}
-function drawWall(now) {
-  // the end of the world: a painted wall with a door
-  const sk = SKY[view.slot];
-  const gr = g.createLinearGradient(0, 0, 0, 640); gr.addColorStop(0, sk.top); gr.addColorStop(1, sk.bot);
-  g.fillStyle = gr; g.fillRect(1552, 0, 48, 640);
-  g.strokeStyle = 'rgba(255,255,255,.6)'; g.lineWidth = 1.5;
-  g.beginPath(); g.moveTo(1552, 0); g.lineTo(1552, 640); g.stroke();
-  for (let y = 40; y < 640; y += 70) { g.beginPath(); g.moveTo(1552, y); g.lineTo(1600, y + 6); g.stroke(); }
-  g.fillStyle = view.leaving ? '#05070c' : '#151b28'; g.fillRect(1560, 554, 30, 78);
-  g.strokeStyle = '#e8edf7'; g.lineWidth = 2; g.strokeRect(1560, 554, 30, 78);
-  g.fillStyle = '#ffffff'; g.font = `700 11px ${CF}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('出口', 1575, 544);
-}
-
-function person(x, y, col, ph, walking, s, alpha) {
-  g.save(); g.globalAlpha = alpha == null ? 1 : alpha; g.translate(x, y); g.scale(s, s);
-  const sw = walking ? Math.sin(ph) * 7 : 0;
-  g.lineCap = 'round'; g.strokeStyle = '#3b3542'; g.lineWidth = 6;
-  g.beginPath(); g.moveTo(-5, -26); g.lineTo(-5 + sw, 0); g.moveTo(5, -26); g.lineTo(5 - sw, 0); g.stroke();
-  g.strokeStyle = col; g.lineWidth = 7;
-  g.beginPath(); g.moveTo(-12, -52); g.lineTo(-16 - sw * .4, -30); g.moveTo(12, -52); g.lineTo(16 + sw * .4, -30); g.stroke();
-  g.fillStyle = col; rr(-14, -60, 28, 38, 9); g.fill();
-  g.fillStyle = '#f2d0b4'; circle(0, -73, 13);
-  g.fillStyle = '#3b3542'; g.beginPath(); g.arc(0, -76, 13.5, Math.PI * 1.02, Math.PI * 1.98); g.fill();
-  g.restore();
-}
-function nameTag(x, y, text, col, active, now) {
-  g.font = `700 15px ${CF}`; g.textAlign = 'center'; g.textBaseline = 'middle';
-  const w = g.measureText(text).width + 14;
-  g.fillStyle = active ? col : 'rgba(15,20,32,.6)'; rr(x - w / 2, y - 116, w, 22, 11); g.fill();
-  g.fillStyle = active ? '#141821' : '#ffffff'; g.fillText(text, x, y - 105);
-  if (active) {
-    const bob = REDUCED ? 0 : Math.sin(now / 160) * 3;
-    g.fillStyle = col; g.beginPath(); g.moveTo(x - 6, y - 92 + bob); g.lineTo(x + 6, y - 92 + bob); g.lineTo(x, y - 84 + bob); g.closePath(); g.fill();
-  }
-}
-function drawPram(x, y, dir) {
-  const px = x + dir * 26;
-  g.fillStyle = '#e4576e'; rr(px - 14, y - 30, 28, 16, 4); g.fill();
-  g.beginPath(); g.arc(px - dir * 6, y - 30, 12, Math.PI, Math.PI * 2); g.fill();
-  g.fillStyle = '#3b3542'; circle(px - 9, y - 6, 5); circle(px + 9, y - 6, 5);
-}
-
-function drawAccident(now) {
-  const t = (now - view.accT0) / 1000;
-  const x = view.tr.x, gy = groundY(x);
-  if (view.acc === 'rain') {
-    const top = gy - 230;
-    g.fillStyle = 'rgba(110,120,140,.92)'; ellipse(x, top, 46, 16); ellipse(x - 24, top + 6, 26, 12); ellipse(x + 26, top + 4, 28, 12);
-    g.strokeStyle = 'rgba(170,200,240,.9)'; g.lineWidth = 2;
-    const span = gy - 92 - (top + 14);
-    for (let i = 0; i < 16; i++) {
-      const rx = x - 34 + (i * 37) % 68;
-      const ry = top + 14 + ((REDUCED ? i * 31 : now / 3 + i * 53) % span);
-      g.beginPath(); g.moveTo(rx, ry); g.lineTo(rx - 2, ry + 12); g.stroke();
-    }
-  } else if (view.acc === 'light') {
-    const lx = view.tr.tx + 48, ly = groundY(lx);
-    const fall = REDUCED ? 1 : Math.min(1, t / 1.1);
-    const y = -40 + (ly + 30) * fall * fall;
-    g.save(); g.translate(lx, y - 12); g.rotate(fall < 1 ? t * 4 : 1.25);
-    g.fillStyle = '#3b3542'; rr(-18, -12, 36, 24, 4); g.fill();
-    g.fillStyle = '#ffe9a8'; circle(18, 0, 9);
-    g.fillStyle = '#ffffff'; g.font = `700 11px ${CF}`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText('7', -4, 0);
-    g.restore();
-    if (fall >= 1) { g.strokeStyle = 'rgba(255,255,255,.85)'; g.lineWidth = 2; for (let i = 0; i < 5; i++) { const a = i * 1.2; g.beginPath(); g.moveTo(lx + Math.cos(a) * 26, ly - 6); g.lineTo(lx + Math.cos(a) * 36, ly - 10 - i * 2); g.stroke(); } }
-  } else if (view.acc === 'radio') {
-    for (let i = 0; i < 3; i++) {
-      const r = (((REDUCED ? i / 3 : now / 700 + i / 3)) % 1) * 60;
-      g.strokeStyle = `rgba(255,255,255,${(1 - r / 60).toFixed(2)})`; g.lineWidth = 2.5;
-      g.beginPath(); g.arc(x + 24, gy - 64, r + 6, -0.9, 0.9); g.stroke();
-    }
-    g.fillStyle = '#3b3542'; rr(x + 12, gy - 72, 16, 12, 2); g.fill();
-  } else if (view.acc === 'door') {
-    const dx = clamp(view.tr.x + 150, 80, 1500);
-    g.fillStyle = 'rgba(255,231,168,.95)'; g.fillRect(dx, 440, 58, 80);
-    g.fillStyle = '#8a6b4a'; g.fillRect(dx + 8, 498, 42, 6);
-    g.fillStyle = '#3b3542'; circle(dx + 20, 478, 6); g.fillRect(dx + 15, 484, 10, 14);
-    g.fillStyle = '#ffffff'; g.fillRect(dx + 32, 494, 12, 4);
-    g.strokeStyle = '#55627a'; g.lineWidth = 2; g.strokeRect(dx, 440, 58, 80);
-    g.fillStyle = '#ffffff'; g.font = `700 11px ${CF}`; g.textAlign = 'center'; g.fillText('后台', dx + 29, 432);
-  }
-}
-
-function drawLabels() {
-  g.font = `600 14px ${CF}`; g.textAlign = 'center'; g.textBaseline = 'middle';
-  for (const p of PLACES) {
-    const x = PX[p], y = p === '大桥' ? 664 : p === '码头' ? 800 : 806;
-    const on = view.place === p && (busy || view.tz > 1);
-    const w = g.measureText(p).width + 16;
-    g.fillStyle = on ? '#8fd3ff' : 'rgba(18,26,41,.55)'; rr(x - w / 2, y - 11, w, 22, 11); g.fill();
-    g.fillStyle = on ? '#0d1522' : '#ffffff'; g.fillText(p, x, y + 1);
-  }
-}
-
-function draw(now) {
-  const sk = SKY[view.slot] || SKY[0];
-  g.setTransform(1, 0, 0, 1, 0, 0);
-  g.fillStyle = '#0a0e17'; g.fillRect(0, 0, CW, CH);
-  const S = CW / 1600, z = view.zoom;
-  const hw = 800 / z, hh = 450 / z;
-  const cx = clamp(view.camX, hw, 1600 - hw), cy = clamp(view.camY, hh, 900 - hh);
-  g.setTransform(S * z, 0, 0, S * z, CW / 2 - cx * S * z, CH / 2 - cy * S * z);
-  drawSky(sk, now);
-  drawSea(sk, now);
-  drawLand(sk);
-  const lit = view.slot === 2;
-  drawHome(PX.家, lit); drawKiosk(PX.报刊亭); drawOffice(PX.保险公司, lit); drawPlaza(PX.广场); drawTavern(PX.小酒馆); drawBeach(PX.海滩); drawPier(); drawBridge(now);
-  if (view.finale) drawWall(now);
-  if (view.slot === 2) { g.fillStyle = 'rgba(40,30,90,.16)'; g.fillRect(0, 0, 1600, 900); }
-  for (const e of view.extras) { person(e.x, 742, e.c, e.ph, e.walking, .9); if (e.stroller) drawPram(e.x, 742, Math.sign(e.tx - e.x) || 1); }
-  // spotlight: the camera never leaves him
-  const ty = groundY(view.tr.x);
-  g.fillStyle = 'rgba(255,255,255,.22)'; ellipse(view.tr.x, ty + 2, 38, 9);
-  for (const name in view.cast) { const c = view.cast[name]; person(c.x, groundY(c.x), CAST[name].color, c.ph, c.walking, 1); }
-  const ta = view.leaving && view.tr.x > 1550 ? clamp(1 - (view.tr.x - 1550) / 30, 0, 1) : 1;
-  person(view.tr.x, ty, CAST.林楚.color, view.tr.ph, view.tr.walking, 1.06, ta);
-  drawAccident(now);
-  for (const name in view.cast) { const c = view.cast[name]; nameTag(c.x, groundY(c.x), name, CAST[name].color, view.speaker === name, now); }
-  if (ta > .3) nameTag(view.tr.x, ty, '林楚', CAST.林楚.color, view.speaker === '林楚', now);
-  drawLabels();
-}
-
-let lastT = performance.now();
-function frame(now) {
-  const dt = Math.min(60, now - lastT) / 1000; lastT = now;
-  if (state) { update(dt, now); draw(now); }
-  requestAnimationFrame(frame);
-}
-
-/* ---------- rendering (DOM) ---------- */
-function renderHeader() {
-  $('#showday').textContent = `直播第 ${fmt(state.showDay + state.day - 1)} 天`;
-  $('#when').textContent = `第 ${state.day}/7 天 · ${SLOTS[state.slot]}`;
-  $('#rate').textContent = fmt(state.ratings);
-  $('#rate').style.color = state.ratings < 600 ? 'var(--warn)' : '';
-  $('#sus').textContent = state.suspicion;
-  const s = state.suspicion, bar = $('#sus-bar');
-  bar.style.width = s + '%';
-  bar.style.backgroundColor = s < 30 ? 'var(--calm)' : s < 60 ? 'var(--sky)' : s < 85 ? 'var(--warn)' : 'var(--tally)';
-  $('#sus').style.color = s >= 85 ? 'var(--tally)' : '';
-  $('#budget').textContent = fmt(state.budget);
-  const h = state.hist, W = 64, H = 22, lo = Math.min(450, ...h), hi = Math.max(1250, ...h);
-  const X = i => (h.length < 2 ? W : i / (h.length - 1) * (W - 4) + 2), Y = v => H - 3 - (v - lo) / (hi - lo) * (H - 6);
-  const pts = h.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
-  const ly = Y(600).toFixed(1), lx = X(h.length - 1).toFixed(1), lyv = Y(h[h.length - 1]).toFixed(1);
-  $('#spark').innerHTML = `<line x1="0" x2="${W}" y1="${ly}" y2="${ly}" stroke="rgba(255,182,72,.55)" stroke-dasharray="2 2" stroke-width="1"/><polyline points="${pts}" fill="none" stroke="#8fd3ff" stroke-width="1.6" stroke-linejoin="round"/><circle cx="${lx}" cy="${lyv}" r="2.4" fill="#8fd3ff"/>`;
-  $('#crew').value = state.crew;
-}
-
-function renderStatus() {
-  const s = $('#crew-status');
-  if (state.crew === 'offline') s.textContent = '排练模式：用预写剧本，不消耗 AI 用量';
-  else if (!sampleChecked) s.textContent = '正在连接 AI…';
-  else if (!sample) s.textContent = '没连上 DeepSeek（检查 .env 里的 key），先用排练剧本';
-  else if (aiBlocked) s.textContent = aiBlockedWhy || 'DeepSeek 用不了，先用排练剧本';
-  else s.textContent = `AI 在线 · DeepSeek（${state.crew === 'default' ? llmModels.default : llmModels.quick}）`;
-}
-
-function selectCard(id, silent) {
-  const c = CARD[id]; if (!c) return;
-  state.sel.card = id;
-  state.sel.actor = c.actor && actorAvailable(c.actor) ? c.actor : null;
-  if (!silent) { save(); renderConsole(); }
-}
-
-function renderConsole() {
-  const ended = !!state.ended, fin = !ended && state.finale;
-  $('#normal-console').hidden = ended || fin;
-  $('#finale-console').hidden = !fin;
-  $('#ended-console').hidden = !ended;
-  $('#slot-info').textContent = ended ? '本季已结束' : fin ? '最终幕' : `下一场：第 ${state.day} 天 · ${SLOTS[state.slot]}`;
-  $('#finale-go').disabled = busy; $('#finale-silent').disabled = busy;
-  if (ended) { $('#ended-text').textContent = `本季结局：${ENDINGS[state.ended.type].title}。`; return; }
-  if (fin) return;
-
-  const acc = state.accident && ACC[state.accident];
-  $('#alert-acc').hidden = !acc;
-  if (acc) $('#acc-text').textContent = `${acc.t}。不管你安排什么，这一场都会出这个事故。`;
-  $('#alert-esc').hidden = !state.pendingEscape;
-  if (state.pendingEscape) $('#esc-text').textContent = `林楚打算离开晴港（${state.intent}）。这一场不出阻拦卡，怀疑值额外 +15。`;
-
-  const box = $('#cards'); box.replaceChildren();
-  for (const id of state.hand) {
-    const c = CARD[id]; if (!c) continue;
-    const b = el('button', 'card'); b.type = 'button'; b.dataset.cat = c.cat;
-    b.setAttribute('aria-pressed', String(state.sel.card === id));
-    b.disabled = busy || c.cost > state.budget;
-    const n = Math.ceil(c.drama / 2);
-    const meta = el('span', 'meta');
-    meta.append(el('span', '', `收视 ${'●'.repeat(n)}${'○'.repeat(5 - n)}`),
-      el('span', '', c.risk > 0 ? `风险 ${'▲'.repeat(c.risk)}` : c.risk < 0 ? `降疑 ${'▼'.repeat(-c.risk)}` : '风险 —'),
-      el('span', '', c.cost ? `${c.cost} 万` : '免费'));
-    b.append(el('span', 'stamp', CAT[c.cat]), el('span', 't', c.t), el('span', 'd', c.d), meta);
-    b.addEventListener('click', () => selectCard(id));
-    box.append(b);
-  }
-
-  const card = CARD[state.sel.card];
-  const chips = $('#actors'); chips.replaceChildren();
-  const names = ['苏梅', '老周', '林母', '小雨', '孙伯'].concat(state.flags.dad ? ['林父'] : []).concat([null]);
-  for (const name of names) {
-    const b = el('button', 'chip'); b.type = 'button';
-    const avail = name ? actorAvailable(name) : true;
-    const pressed = card && card.lock ? card.actor === name : state.sel.actor === name;
-    b.setAttribute('aria-pressed', String(pressed));
-    b.disabled = busy || !avail || !!(card && card.lock && card.actor !== name);
-    const dot = el('i'); dot.style.setProperty('--c', name ? CAST[name].color : '#8f9cb7');
-    b.append(dot, el('span', '', name || '只用群演'));
-    if (name) b.append(el('small', '', avail ? CAST[name].role : '还没回镇'));
-    b.addEventListener('click', () => { state.sel.actor = name; save(); renderConsole(); });
-    chips.append(b);
-  }
-  const who = card && card.lock ? card.actor : state.sel.actor;
-  $('#actor-note').textContent = who ? `演员档案 · ${who}：${CAST[who].note}` : '群演只会按路线走来走去，不会主动推动剧情。';
-  if (card && card.lock) $('#actor-note').textContent += '（这张卡指定了演员）';
-
-  const w = $('#whisper');
-  if (document.activeElement !== w) w.value = state.sel.whisper;
-  w.disabled = busy;
-  $('#sponsor').checked = !!state.sel.sponsor; $('#sponsor').disabled = busy;
-  $('#sp-name').textContent = sponsorToday().n;
-  const go = $('#go');
-  go.disabled = busy || !card || card.cost > state.budget;
-  go.textContent = busy ? '拍摄中' : '开拍';
-  $('#cut').hidden = !inFlight;
-  $('#skip').hidden = !busy || inFlight;
-  if (!busy && !hintLock) {
-    const parts = [];
-    if (card) parts.push(card.cost ? `花费 ${card.cost} 万` : '不花钱');
-    if (state.sel.sponsor) parts.push(`赞助 +${SPONSOR_PAY} 万`);
-    if (effectiveMode() === 'default') parts.push('精细模式会先思考，每场要等半分钟左右');
-    setHint(parts.join(' · '));
-  }
-}
-let hintLock = false;
-function setHint(text, bad) {
-  const h = $('#hint'); h.textContent = text || ''; h.classList.toggle('bad', !!bad);
-  if (bad) { hintLock = true; setTimeout(() => { hintLock = false; }, 6000); }
-}
-
-function renderMind() {
-  const m = state.minds[0];
-  $('#mind-d').textContent = m ? m.d : '';
-  $('#mind').textContent = m ? `「${m.text}」` : '';
-  const older = $('#mind-older'); older.replaceChildren();
-  for (const o of state.minds.slice(1, 3)) older.append(el('p', '', `${o.d}：${o.text}`));
-  $('#intent').textContent = state.intent || '暂时没什么打算';
-  $('#intent-row').classList.toggle('esc', state.pendingEscape);
-}
-function renderClues() {
-  const ul = $('#clues'); ul.replaceChildren();
-  $('#clue-count').textContent = `${state.clues.length} 条`;
-  if (!state.clues.length) { ul.append(el('li', 'empty', '还没有。他目前对一切深信不疑。')); return; }
-  for (const c of state.clues.slice(-8).reverse()) { const li = el('li'); li.append(el('time', '', c.d), el('span', '', c.t)); ul.append(li); }
-}
-function renderLog() {
-  const box = $('#log'); box.replaceChildren();
-  for (const L of state.log) {
-    let n;
-    if (L.k === 'day') n = el('div', 'l-day', L.text);
-    else if (L.k === 'take') { n = el('div', 'l-take'); n.append(el('span', 'slate', L.n ? `场 ${L.n}` : '序'), el('span', '', `第${L.day}天·${SLOTS[L.slot]} · ${L.place}`), el('em', '', L.title)); }
-    else if (L.k === 'dir') n = el('div', 'l-dir', L.text);
-    else if (L.k === 'beat') {
-      if (L.say) {
-        n = el('div', 'l-beat');
-        const w = el('span', 'who', L.who); w.style.setProperty('--c', colorOf(L.who));
-        const body = el('span'); body.append(el('span', '', L.say)); if (L.act) body.append(el('span', 'act', ` （${L.act}）`));
-        n.append(w, body);
-      } else n = el('div', 'l-act', L.who && L.who !== '旁白' ? `${L.who}${L.act}` : L.act);
-    }
-    else if (L.k === 'note') n = el('div', 'l-note', `场务备注：${L.text}`);
-    else if (L.k === 'res') n = el('div', 'l-res', L.text);
-    else n = el('div', 'l-sys', L.text);
-    box.append(n);
-  }
-  box.scrollTop = box.scrollHeight;
-}
-function setSubtitle(who, say, act) {
-  const s = $('#subtitle'); s.replaceChildren();
-  if (!say && !act) { s.hidden = true; return; }
-  s.hidden = false;
-  if (who && who !== '旁白' && say) {
-    const b = el('b', '', who); b.style.color = colorOf(who);
-    s.append(b, document.createTextNode(`：${say}`));
-    if (act) s.append(el('i', '', ` （${act}）`));
-  } else s.append(el('i', '', who && who !== '旁白' && !say ? `${who}${act}` : (act || say)));
-}
-function renderAll() { renderHeader(); renderStatus(); renderConsole(); renderMind(); renderClues(); renderLog(); renderOverlay(); }
-
-function spawnDanmu(list) {
-  if (REDUCED || !list.length) return;
-  const box = $('#danmu');
-  list.slice(0, 6).forEach((txt, i) => {
-    setTimeout(() => {
-      const sp = el('span', '', txt);
-      sp.style.top = `${4 + (i % 4) * 24}px`;
-      box.append(sp);
-      const dist = box.clientWidth + sp.offsetWidth + 24;
-      const a = sp.animate([{ transform: 'translateX(0)' }, { transform: `translateX(${-dist}px)` }], { duration: 7000 + Math.random() * 3000, easing: 'linear' });
-      a.onfinish = () => sp.remove();
-    }, i * 650 + Math.random() * 400);
-  });
-}
-
-/* ---------- engines ---------- */
-function parseLine(line, onObj) {
-  let s = line.trim(); if (!s) return;
-  s = s.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
-  if (s.startsWith('[')) { try { const a = JSON.parse(s); if (Array.isArray(a)) a.forEach(onObj); } catch (e) { /* skip */ } return; }
-  const i = s.indexOf('{'), j = s.lastIndexOf('}');
-  if (i < 0 || j <= i) return;
-  try { onObj(JSON.parse(s.slice(i, j + 1))); } catch (e) { /* skip malformed line */ }
-}
-
-async function callAI(prompt, onObj, tier) {
-  let pending = '';
-  ctl = new AbortController();
-  inFlight = true; renderConsole();
-  try {
-    await sample(prompt, {
-      modelTier: tier, cache: false, signal: ctl.signal,
-      onText: ({ delta }) => { const parts = (pending + delta).split('\n'); pending = parts.pop(); parts.forEach(l => parseLine(l, onObj)); },
-    });
-    if (pending.trim()) parseLine(pending, onObj);
-  } finally { inFlight = false; ctl = null; renderConsole(); }
-}
-
-function offlineMind() { return pick(MINDS[level(state.suspicion)]); }
-function offlineEnd(ctx) {
-  const c = ctx.card;
-  const delta = c.risk * 3 - 2 + (ctx.sponsor ? 4 : 0) + (ctx.accident ? 12 : 0) + (ctx.whisper ? 2 : 0) + Math.round(Math.random() * 4 - 2);
-  const after = state.suspicion + delta;
-  const A = ctx.actor || '群演';
-  return {
-    delta, drama: clamp(c.drama + (ctx.accident ? 2 : 0) + Math.round(Math.random() * 2 - 1), 1, 10),
-    noticed: ctx.accident ? ctx.accident.short : ctx.sponsor && Math.random() < .6 ? `${A}说话像在念广告词` : '',
-    intent: pick(INTENTS[level(after)]), escape: after >= 80 && Math.random() < .7,
-    memo: `${c.t}${ctx.accident ? '，还碰上了怪事' : ''}`, actor_note: '', danmu: pickN(DANMU, 4),
-  };
-}
-async function offlineScene(ctx, onObj) {
-  const c = ctx.card, A = ctx.actor || '群演';
-  const place = c.place || pick(['广场', '报刊亭', '海滩', '码头']);
-  onObj({ k: 'scene', place, cam: CAMS[place] });
-  const ad = ['这事儿我也是刚听说。', '你别多想，都是好事。', '哎呀，真巧啊！'];
-  const beats = (c.fb || []).map(([who, say, act]) => {
-    if (who === '{A}' && ctx.actor !== c.actor) return { k: 'beat', who: A, say: A === '群演' ? '' : pick(ad), act: A === '群演' ? '群演们面面相觑' : '' };
-    return { k: 'beat', who: who.replace('{A}', A), say: say.replaceAll('{A}', A), act: act.replaceAll('{A}', A) };
-  });
-  if (ctx.whisper) beats.splice(1, 0, { k: 'beat', who: A, say: '', act: `按耳麦指示行事：${ctx.whisper}` });
-  if (ctx.accident) beats.push({ k: 'beat', who: '旁白', say: '', act: ctx.accident.t }, { k: 'beat', who: '林楚', say: ctx.accident.react, act: '' });
-  if (ctx.sponsor) beats.push({ k: 'beat', who: A === '群演' ? '孙伯' : A, say: ctx.sponsor.s, act: `突然举起一罐${ctx.sponsor.n}，对着空气微笑` });
-  if (ctx.escapeBefore) beats.push(c.cat === 'block' ? { k: 'beat', who: '旁白', say: '', act: '林楚本想去大桥，却被拦了下来' } : { k: 'beat', who: '旁白', say: '', act: '林楚趁乱朝大桥走去，离出口更近了' });
-  for (const b of beats) { onObj(b); await wait(60); }
-  onObj({ k: 'mind', text: offlineMind() });
-  onObj(Object.assign({ k: 'end' }, offlineEnd(ctx)));
-}
-async function offlineFinale(words, onObj) {
-  const beats = [
-    { k: 'beat', who: '旁白', say: '', act: '林楚伸手摸了摸天空。是一面墙，凉的。' },
-    { k: 'beat', who: '林楚', say: words ? '你说的话，我听见了。' : '……连一句解释都没有吗？', act: '他抬头看着天' },
-    { k: 'beat', who: '林楚', say: '这三十三年，谢谢你们陪着我。', act: '他对着天空鞠了一躬' },
-  ];
-  for (const b of beats) { onObj(b); await wait(60); }
-  onObj({ k: 'end', stay: false, last: '外面要是没有观众，我也想去看看。', danmu: ['走吧！', '我哭了', '导演输了', '再见了林楚'] });
-}
-
-const ERR = {
-  rate_limited: 'DeepSeek 限流了，稍等一会儿再开拍。经费已退回。',
-  invalid_request: 'DeepSeek 拒绝了这次请求，换个安排再试试。经费已退回。',
-  cancelled: '喊卡！这场不算，经费已退回。',
-  empty_completion: '导演组交了白卷，换个安排再试试。经费已退回。',
-  upstream_error: '信号中断（连不上 DeepSeek），这场没拍成。经费已退回，可以重拍。',
-};
-// 这些错误重试也没用：切到排练模式，并在状态栏说明原因
-const PERMANENT_WHY = {
-  no_key: '本地服务没有配置 DEEPSEEK_API_KEY，先用排练剧本',
-  auth_failed: 'DeepSeek 说 key 无效，检查 .env 后重启服务',
-  no_balance: 'DeepSeek 余额不足，充值后刷新页面',
-};
-const PERMANENT = new Set(Object.keys(PERMANENT_WHY));
-
-// 浏览器只请求本地服务的 /api/chat，key 留在 server.js 里。调用方式与 v0.1 的 sample() 一致。
-let llmModels = { quick: 'deepseek-chat', default: 'deepseek-reasoner' };
-async function llmSample(prompt, opts = {}) {
-  const fail = (code, message, text) => { const e = { code, message }; if (text) e.text = text; return e; };
-  let res;
-  try {
-    res = await fetch('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt, tier: opts.modelTier }), signal: opts.signal });
-  } catch (e) {
-    throw fail(e && e.name === 'AbortError' ? 'cancelled' : 'upstream_error', String(e && e.message || e));
-  }
-  if (!res.ok) {
-    let j = {};
-    try { j = await res.json(); } catch (e) { /* not json */ }
-    throw fail(j.code || 'upstream_error', j.message || res.statusText);
-  }
-  const reader = res.body.getReader();
-  const dec = new TextDecoder();
-  let text = '';
-  try {
-    for (;;) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      const delta = dec.decode(value, { stream: true });
-      if (!delta) continue;
-      text += delta;
-      if (opts.onText) opts.onText({ text, delta });
-    }
-  } catch (e) {
-    throw fail(e && e.name === 'AbortError' ? 'cancelled' : 'upstream_error', String(e && e.message || e), text);
-  }
-  if (!text.trim()) throw fail('empty_completion', 'DeepSeek 没有返回内容');
-  return { text, truncated: false };
-}
-
-async function stageScene(o, ctx, takeIdx) {
-  const place = PLACES.includes(o.place) ? o.place : (ctx.card.place || '广场');
-  if (state.log[takeIdx]) state.log[takeIdx].place = place;
-  view.place = place; view.slot = ctx.slot;
-  const cam = clean(o.cam, 14) || CAMS[place];
-  let hsh = 0; for (const ch of cam) hsh = (hsh * 31 + ch.charCodeAt(0)) % 997;
-  $('#cam').textContent = `CAM ${String(hsh % 300 + 1).padStart(3, '0')} · ${cam}`;
-  view.cast = {};
-  view.tr.tx = PX[place];
-  view.tz = 1.5;
-  if (ctx.actor) addCast(ctx.actor);
-  view.acc = ctx.accident ? ctx.accident.id : null; view.accT0 = performance.now();
-  tcStart = performance.now();
-  renderLog();
-  const t0 = performance.now();
-  while (!REDUCED && !skipFast && Math.abs(view.tr.x - view.tr.tx) > 3 && performance.now() - t0 < 2400) await wait(50);
-  view.tr.x = view.tr.tx;
-}
-async function playBeat(o) {
-  const who = clean(o.who, 8) || '旁白', say = clean(o.say, 90), act = clean(o.act, 90);
-  if (!say && !act) return;
-  if (CAST[who] && who !== '林楚') addCast(who);
-  view.speaker = who;
-  pushLog({ k: 'beat', who, say, act });
-  setSubtitle(who, say, act);
-  renderLog();
-  await wait(skipFast ? 200 : REDUCED ? 900 : clamp(1000 + (say.length + act.length) * 55, 1500, 4200));
-}
-
-async function runScene() {
-  if (busy || state.ended || state.finale) return;
-  const card = CARD[state.sel.card]; if (!card) return;
-  if (card.cost > state.budget) { setHint('经费不够了，换一张便宜点的卡。', true); return; }
-  busy = true; skipFast = false; hintLock = false; setHint('');
-  document.body.classList.add('shooting');
-  renderConsole();
-  await samplePromise;
-  const actor = card.lock ? card.actor : (state.sel.actor && actorAvailable(state.sel.actor) ? state.sel.actor : null);
-  const ctx = {
-    card, actor, whisper: clean(state.sel.whisper, 80),
-    sponsor: state.sel.sponsor ? sponsorToday() : null,
-    accident: state.accident ? ACC[state.accident] : null,
-    escapeBefore: state.pendingEscape, day: state.day, slot: state.slot,
-  };
-  const before = { budget: state.budget, log: state.log.length };
-  state.budget += (ctx.sponsor ? SPONSOR_PAY : 0) - card.cost;
-  pushLog({ k: 'take', n: state.take + 1, day: ctx.day, slot: ctx.slot, place: card.place || '…', title: card.t });
-  const takeIdx = state.log.length - 1;
-  const bits = [`派出：${actor || '只有群演'}`];
-  if (ctx.whisper) bits.push(`耳麦：「${ctx.whisper}」`);
-  if (ctx.sponsor) bits.push(`植入：${ctx.sponsor.n}`);
-  if (ctx.accident) bits.push(`突发：${ctx.accident.short}`);
-  pushLog({ k: 'dir', text: bits.join('｜') });
-  renderHeader(); renderLog();
-  const mode = effectiveMode();
-  setSubtitle('', '', mode === 'offline' ? '排练组正在走位……' : '导演组正在写这场戏……');
-
-  const tok = ++takeTok; let chain = Promise.resolve();
-  const q = fn => { chain = chain.then(() => (tok === takeTok ? fn() : undefined)); };
-  const got = { scene: null, beats: 0, mind: '', end: null };
-  const onObj = o => {
-    if (!o || typeof o !== 'object') return;
-    if (o.k === 'scene') { if (!got.scene) { got.scene = o; q(() => stageScene(o, ctx, takeIdx)); } }
-    else if (o.k === 'beat') {
-      if (!got.scene) { got.scene = { place: card.place }; q(() => stageScene(got.scene, ctx, takeIdx)); }
-      if (got.beats < 10) { got.beats++; q(() => playBeat(o)); }
-    }
-    else if (o.k === 'mind') got.mind = clean(o.text, 240);
-    else if (o.k === 'end') got.end = o;
-  };
-
-  try {
-    if (mode === 'offline') await offlineScene(ctx, onObj);
-    else await callAI(buildPrompt(ctx), onObj, mode);
-  } catch (e) {
-    const code = (e && e.code) || 'upstream_error';
-    if (PERMANENT.has(code)) {
-      aiBlocked = true; aiBlockedWhy = PERMANENT_WHY[code]; renderStatus();
-      pushLog({ k: 'sys', text: `${PERMANENT_WHY[code]}。这场改用排练剧本。` });
-      if (!got.beats) await offlineScene(ctx, onObj);
-    } else if (code === 'invalid_request' || code === 'cancelled' || !got.beats) {
-      takeTok++;
-      state.log.length = before.log; state.budget = before.budget;
-      view.acc = null; view.speaker = null; view.tz = 1;
-      busy = false; document.body.classList.remove('shooting');
-      setSubtitle('', '', '');
-      renderAll(); setHint(ERR[code] || ERR.upstream_error, true);
-      return;
-    } else {
-      pushLog({ k: 'sys', text: '信号中断，后半场由排练组补完。' });
-    }
-  }
-  if (!got.scene) { got.scene = { place: card.place }; q(() => stageScene(got.scene, ctx, takeIdx)); }
-  renderConsole();
-  await chain;
-  if (!got.mind) got.mind = offlineMind();
-  if (!got.end) got.end = offlineEnd(ctx);
-  applyEnd(ctx, got);
-  busy = false; document.body.classList.remove('shooting');
-  save(); renderAll();
-}
-
-function applyEnd(ctx, got) {
-  const e = got.end;
-  const delta = clamp(int(e.delta), -12, 30);
-  const esc = ctx.escapeBefore && ctx.card.cat !== 'block' ? 15 : 0;
-  const s0 = state.suspicion;
-  state.suspicion = clamp(s0 + delta + esc, 0, 100);
-  const drama = clamp(int(e.drama) || ctx.card.drama, 1, 10);
-  const tired = state.lastCat === ctx.card.cat;
-  const target = 420 + drama * 85 + (ctx.accident ? 60 : 0) - (tired ? 80 : 0) + Math.round(Math.random() * 60 - 30);
-  const r = Math.max(120, Math.round(state.ratings * 0.5 + target * 0.5));
-  state.ratings = r; state.hist.push(r); if (state.hist.length > 22) state.hist.shift();
-  state.dayRatings.push(r); state.total += r;
-  state.lowStreak = r < 600 ? state.lowStreak + 1 : 0;
-  state.lastCat = ctx.card.cat;
-  state.take++;
-  if (ctx.card.id === 'ex') state.flags.yu = true;
-  if (ctx.card.id === 'father') state.flags.dad = true;
-  if (ctx.card.once) state.used.push(ctx.card.id);
-  const stamp = `${ctx.day}·${SLOTS[ctx.slot]}`;
-  const noticed = clean(e.noticed, 60);
-  if (noticed) state.clues.push({ d: stamp, t: noticed });
-  const memo = clean(e.memo, 60);
-  if (memo) { state.memos.push(`第${ctx.day}天${SLOTS[ctx.slot]}：${memo}`); if (state.memos.length > 12) state.memos.shift(); }
-  const intent = clean(e.intent, 30); if (intent) state.intent = intent;
-  state.pendingEscape = e.escape === true || e.escape === 'true' || state.suspicion >= 85;
-  state.minds.unshift({ d: `第 ${ctx.day} 天 · ${SLOTS[ctx.slot]}`, text: got.mind }); state.minds.length = Math.min(state.minds.length, 3);
-  const note = clean(e.actor_note, 70); if (note) pushLog({ k: 'note', text: note });
-  pushLog({ k: 'res', text: `怀疑 ${s0} → ${state.suspicion}（${sgn(delta)}${esc ? '，没拦住他 +15' : ''}） · 收视 ${fmt(r)} 万${tired ? '（同类戏连播，观众腻了）' : ''}${state.lowStreak ? ` · 低收视 ${state.lowStreak}/3` : ''}` });
-  const dm = Array.isArray(e.danmu) ? e.danmu.map(x => clean(x, 24)).filter(Boolean) : [];
-  spawnDanmu(dm.length ? dm : pickN(DANMU, 4));
-  view.speaker = null; view.tz = 1; view.acc = null;
-  setSubtitle('', '', '');
-
-  if (state.suspicion >= 100) {
-    state.finale = true; view.finale = true; view.tr.tx = 1528; view.place = '大桥';
-    pushLog({ k: 'sys', text: '林楚冲过了大桥，来到了晴港的尽头。天空，原来是一面墙。' });
-    return;
-  }
-  if (state.lowStreak >= 3) { endGame('cancel'); return; }
-  advance();
-}
-
-function advance() {
-  state.slot++;
-  if (state.slot > 2) {
-    const avg = Math.round(state.dayRatings.reduce((a, b) => a + b, 0) / Math.max(1, state.dayRatings.length));
-    state.dayRatings = [];
-    if (state.day >= 7) { endGame('season'); return; }
-    state.day++; state.slot = 0;
-    const income = clamp(Math.round(40 + (avg - 600) / 6), 20, 160);
-    state.budget += income;
-    pushLog({ k: 'day', text: `第 ${state.day} 天` });
-    pushLog({ k: 'sys', text: `电视台结算：昨天平均收视 ${fmt(avg)} 万，拨款 +${income} 万。今日赞助商：${sponsorToday().n}。` });
-  }
-  view.slot = state.slot;
-  rollAccident(); deal();
-  state.sel.whisper = ''; state.sel.sponsor = false;
-}
-
-async function runFinale(silent) {
-  if (busy || !state.finale || state.ended) return;
-  busy = true; skipFast = false; document.body.classList.add('shooting'); renderConsole();
-  await samplePromise;
-  const words = silent ? '' : clean($('#finale-words').value, 200);
-  view.finale = true; view.tr.tx = 1528; view.cast = {};
-  const before = state.log.length;
-  pushLog({ k: 'take', n: state.take + 1, day: state.day, slot: state.slot, place: '世界尽头', title: '最终幕' });
-  if (words) { pushLog({ k: 'beat', who: '导演', say: words, act: '声音从天空传来' }); setSubtitle('导演', words, ''); }
-  else { pushLog({ k: 'beat', who: '旁白', say: '', act: '天空一片寂静。导演什么也没说。' }); setSubtitle('旁白', '', '天空一片寂静。导演什么也没说。'); }
-  renderLog();
-  const tok = ++takeTok; let chain = wait(skipFast ? 200 : 2200);
-  const q = fn => { chain = chain.then(() => (tok === takeTok ? fn() : undefined)); };
-  const got = { beats: 0, end: null };
-  const onObj = o => { if (!o || typeof o !== 'object') return; if (o.k === 'beat' && got.beats < 8) { got.beats++; q(() => playBeat(o)); } else if (o.k === 'end') got.end = o; };
-  const mode = effectiveMode();
-  try {
-    if (mode === 'offline') await offlineFinale(words, onObj);
-    else await callAI(buildFinalePrompt(words), onObj, mode);
-  } catch (e) {
-    const code = (e && e.code) || 'upstream_error';
-    if (!PERMANENT.has(code) && !got.beats) {
-      takeTok++; state.log.length = before;
-      busy = false; document.body.classList.remove('shooting');
-      setSubtitle('', '', ''); renderAll(); setHint(ERR[code] || ERR.upstream_error, true);
-      return;
-    }
-    if (PERMANENT.has(code)) { aiBlocked = true; aiBlockedWhy = PERMANENT_WHY[code]; renderStatus(); }
-    if (!got.beats) await offlineFinale(words, onObj);
-  }
-  renderConsole();
-  await chain;
-  const e = got.end || { stay: false, last: '外面要是没有观众，我也想去看看。' };
-  const stay = e.stay === true || e.stay === 'true';
-  const last = clean(e.last, 60) || (stay ? '……我再想想。' : '外面要是没有观众，我也想去看看。');
-  state.take++;
-  const dm = Array.isArray(e.danmu) ? e.danmu.map(x => clean(x, 24)).filter(Boolean) : [];
-  spawnDanmu(dm.length ? dm : ['我哭了', '走吧！', '导演输了']);
-  if (!stay) { view.leaving = true; view.tr.tx = 1590; }
-  await wait(REDUCED ? 300 : 2200);
-  endGame(stay ? 'stay' : 'leave', last);
-  busy = false; document.body.classList.remove('shooting');
-  save(); renderAll();
-}
-
-/* ---------- endings ---------- */
-const ENDINGS = {
-  leave: { title: '他推开了那扇门' },
-  stay: { title: '他留了下来' },
-  cancel: { title: '节目停播了' },
-  season: { title: '第一季播完了' },
-};
-function endGame(type, last) {
-  state.ended = { type, last: last || '', day: state.day };
-  pushLog({ k: 'sys', text: `—— 本季结束：${ENDINGS[type].title} ——` });
-  view.speaker = null; view.tz = 1;
-}
-function renderOverlay() {
-  const ov = $('#overlay');
-  if (!state.ended || state.ended.hidden) { ov.hidden = true; return; }
-  const E = state.ended, takes = Math.max(1, state.take);
-  const avg = Math.round(state.total / takes);
-  let text = '';
-  if (E.type === 'leave') text = `林楚最后说："${E.last}" 然后他对着天空鞠了一躬，推开门，走进了外面的黑暗。全世界的观众愣了几秒，然后有人开始换台。`;
-  else if (E.type === 'stay') text = `"${E.last}" 门在他面前慢慢关上。第二天早上，晴港照常天晴。节目还在继续。`;
-  else if (E.type === 'cancel') text = '收视率连续三场低于 600 万，电视台撤下了《真实人生》。第二天早上，林楚推开家门，发现整条街空无一人。他犹豫了一下，朝大桥走去。';
-  else {
-    const rank = avg >= 1000 ? 'S' : avg >= 900 ? 'A' : avg >= 780 ? 'B' : 'C';
-    const lines = { S: '林楚什么都没发现，观众却离不开他了。电视台当场给你续约三季。', A: '一季好戏。林楚还在晴港，观众还在追，赞助商排着队。', B: '平稳的一季。林楚偶尔会盯着天空发呆，但他还在。', C: '平平无奇的一季。他没发现，观众也没怎么看。' };
-    text = `评级 ${rank}。${lines[rank]}`;
-  }
-  $('#end-eyebrow').textContent = `本季结局 · 第 ${E.day} 天`;
-  $('#end-title').textContent = ENDINGS[E.type].title;
-  $('#end-text').textContent = text;
-  const dl = $('#end-stats'); dl.replaceChildren();
-  for (const [k, v] of [['播出场次', state.take], ['平均收视', `${fmt(avg)}万`], ['最终怀疑', state.suspicion], ['被发现的破绽', state.clues.length]]) {
-    const d = el('div'); d.append(el('dt', '', k), el('dd', '', String(v))); dl.append(d);
-  }
-  ov.hidden = false;
-}
-
-/* ---------- boot ---------- */
-function resetView() {
-  view.finale = !!state.finale; view.leaving = false; view.cast = {}; view.speaker = null; view.acc = null; view.tz = 1;
-  view.slot = state.slot;
-  const lastTake = [...state.log].reverse().find(l => l.k === 'take');
-  view.place = state.finale ? '大桥' : (lastTake && PLACES.includes(lastTake.place) ? lastTake.place : '家');
-  view.tr.x = view.tr.tx = state.finale ? 1528 : PX[view.place];
-  if (!state.finale && state.take === 0) { view.cast = { 苏梅: { x: 222, tx: 222, ph: 0 } }; }
-  const lastBeat = [...state.log].reverse().find(l => l.k === 'beat');
-  if (lastBeat) setSubtitle(lastBeat.who, lastBeat.say, lastBeat.act);
-}
-function restart() {
-  takeTok++; if (ctl) ctl.abort();
-  busy = false; inFlight = false; document.body.classList.remove('shooting');
-  state = newGame(state && state.crew);
-  $('#danmu').replaceChildren();
-  $('#finale-words').value = '';
-  resetView(); save(); renderAll();
-}
-function armRestart(btn) {
-  if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = '重开'; restart(); return; }
-  btn.dataset.armed = '1'; btn.textContent = '确定重开？';
-  setTimeout(() => { if (btn.dataset.armed) { delete btn.dataset.armed; btn.textContent = '重开'; } }, 3000);
-}
-
-$('#go').addEventListener('click', runScene);
-$('#whisper').addEventListener('input', e => { state.sel.whisper = e.target.value; save(); });
-$('#sponsor').addEventListener('change', e => { state.sel.sponsor = e.target.checked; save(); renderConsole(); });
-$('#crew').addEventListener('change', e => { state.crew = e.target.value; save(); renderStatus(); renderConsole(); });
-$('#cut').addEventListener('click', () => { if (ctl) ctl.abort(); });
-$('#skip').addEventListener('click', () => { skipFast = true; });
-$('#monitor').addEventListener('click', () => { if (busy && !inFlight) skipFast = true; });
-$('#finale-go').addEventListener('click', () => runFinale(false));
-$('#finale-silent').addEventListener('click', () => runFinale(true));
-$('#restart-top').addEventListener('click', e => armRestart(e.currentTarget));
-$('#restart-end').addEventListener('click', restart);
-$('#restart-overlay').addEventListener('click', restart);
-$('#close-overlay').addEventListener('click', () => { if (state.ended) { state.ended.hidden = true; save(); renderOverlay(); } });
-$('#show-ending').addEventListener('click', () => { if (state.ended) { state.ended.hidden = false; renderOverlay(); } });
-
-setInterval(() => {
-  const sec = Math.floor(SLOT_SEC[view.slot] + (busy ? (performance.now() - tcStart) / 1000 * 8 : 0)) % 86400;
-  const p = n => String(n).padStart(2, '0');
-  $('#tc').textContent = `${p(Math.floor(sec / 3600))}:${p(Math.floor(sec / 60) % 60)}:${p(sec % 60)}`;
-}, 500);
-
-const samplePromise = fetch('/api/status', { cache: 'no-store' })
-  .then(r => r.json())
-  .then(s => { if (s && s.models) llmModels = s.models; return s && s.ai ? llmSample : null; })
-  .catch(() => null);
-samplePromise.then(s => { sample = s; sampleChecked = true; if (state) { renderStatus(); renderConsole(); } });
-
-state = load() || newGame();
-if (!CARD[state.sel.card]) deal();
-resetView(); renderAll();
-requestAnimationFrame(frame);
-})();
+  setTimeout(function () {
+    if (!window.__booted) document.getElementById('loading').textContent = '3D 引擎没加载出来。用 npm start 启动后再打开，并确认浏览器支持 WebGL。';
+  }, 20000);
 </script>
+<script type="module" src="game/main.js"></script>
 </body>
 </html>

@@ -1,7 +1,7 @@
 // 剧情引擎：拼提示词、调用本地 /api/chat（再转给 DeepSeek）、解析逐行 JSON、AI 不可用时的排练剧本。
 // 大部分内容搬自 v0.1（public/index.html），只把“时段”换成了具体时间和地点。
-import { CAST, MINDS, INTENTS, DANMU } from './data.js';
-import { pick, clamp } from './engine.js';
+import { CAST, MINDS, INTENTS, INTENT_AT, DANMU, LOCS, STOP_MIN } from './data.js';
+import { pick, clamp, fmtClock } from './engine.js';
 
 const pickN = (a, n) => a.slice().sort(() => Math.random() - 0.5).slice(0, n);
 export const clean = (s, n) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim().slice(0, n);
@@ -54,6 +54,10 @@ export function buildPrompt(ctx, S) {
   L.push(`耳麦指令：${ctx.whisper ? `「${ctx.whisper}」（导演悄悄告诉演员的话。演员会尽力执行，但可能演得生硬，或按自己的私心发挥）` : '无'}`);
   L.push(`植入广告：${ctx.sponsor ? `${ctx.sponsor.n}，广告词「${ctx.sponsor.s}」。演员必须在戏里生硬地念出来，这是笑点。` : '无'}`);
   L.push(`本场事件的风险提示：${riskHint(ctx.card.risk)}`);
+  if (ctx.accident) {
+    const a = ctx.accident;
+    L.push(`突发舞台事故（${a.ago}分钟前刚发生）：${a.t}。${a.near ? '林楚亲眼看见了。' : '林楚当时不在附近，但可能听人说起。'}演员们必须在这场戏里临场把它圆过去，圆得越生硬越容易露馅。`);
+  }
   L.push(RULES);
   return L.join('\n');
 }
@@ -139,12 +143,12 @@ export const offlineMind = sus => pick(MINDS[level(sus)]);
 
 export function offlineEnd(ctx, sus) {
   const c = ctx.card;
-  const delta = c.risk * 3 - 2 + (ctx.sponsor ? 4 : 0) + (ctx.whisper ? 2 : 0) + Math.round(Math.random() * 4 - 2);
+  const delta = c.risk * 3 - 2 + (ctx.sponsor ? 4 : 0) + (ctx.whisper ? 2 : 0) + (ctx.accident ? 4 : 0) + Math.round(Math.random() * 4 - 2);
   const after = sus + delta;
   const A = ctx.actor || '群演';
   return {
-    delta, drama: clamp(c.drama + Math.round(Math.random() * 2 - 1), 1, 10),
-    noticed: ctx.sponsor && Math.random() < 0.6 ? `${A}说话像在念广告词` : '',
+    delta, drama: clamp(c.drama + (ctx.accident ? 2 : 0) + Math.round(Math.random() * 2 - 1), 1, 10),
+    noticed: ctx.accident && Math.random() < 0.5 ? `${A}圆场圆得太快了：“${ctx.accident.cover}”` : ctx.sponsor && Math.random() < 0.6 ? `${A}说话像在念广告词` : '',
     intent: pick(INTENTS[level(after)]), escape: after >= 80 && Math.random() < 0.7,
     memo: `在${ctx.place}：${c.t}`, actor_note: '', danmu: pickN(DANMU, 4),
   };
@@ -160,8 +164,86 @@ export async function offlineScene(ctx, onObj, sus) {
   });
   if (ctx.whisper) beats.splice(1, 0, { k: 'beat', who: A, say: '', act: `按耳麦指示行事：${ctx.whisper}` });
   if (ctx.sponsor) beats.push({ k: 'beat', who: A === '群演' ? '旁白' : A, say: A === '群演' ? '' : ctx.sponsor.s, act: `突然举起一罐${ctx.sponsor.n}，对着空气微笑` });
-  if (ctx.escapeBefore) beats.push(c.cat === 'block' ? { k: 'beat', who: '旁白', say: '', act: '林楚本想去大桥，却被拦了下来' } : { k: 'beat', who: '旁白', say: '', act: '林楚趁乱朝大桥走去，离出口更近了' });
+  if (ctx.accident) {
+    const a = ctx.accident, who = A === '群演' ? '旁白' : A;
+    beats.push({ k: 'beat', who: '林楚', say: a.react, act: '' }, { k: 'beat', who, say: who === '旁白' ? '' : a.cover, act: who === '旁白' ? `群演们装作什么都没发生：${a.cover}` : '他飞快地接了一句，眼睛却不敢看林楚' });
+  }
+  if (ctx.escapeBefore) beats.push(c.cat === 'block' ? { k: 'beat', who: '旁白', say: '', act: '林楚本想离开晴港，却被拦了下来' } : { k: 'beat', who: '旁白', say: '', act: '林楚趁乱朝大桥走去，离出口更近了' });
   for (const b of beats) { onObj(b); await wait(60); }
   onObj({ k: 'mind', text: offlineMind(sus) });
   onObj(Object.assign({ k: 'end' }, offlineEnd(ctx, sus)));
+}
+
+// ---------- 每晚日记 ----------
+const PLACES = Object.keys(LOCS);
+const EARLIEST = 7 * 60, LATEST = 20 * 60 + 30;
+
+export function buildDiaryPrompt(S, tomorrow) {
+  const L = ['你是互动游戏《真实人生》的剧情引擎。现在是深夜，林楚回到家，睡前写日记。日记只写给他自己看，他是有自由意志的真人。', BIBLE];
+  L.push(`【今天】第${S.day}天。怀疑值 ${S.sus}/100（0=深信不疑，100=确信世界是假的）。`);
+  L.push(`他现在的打算：${S.intent || '无'}`);
+  L.push(`今天发生的事：${S.today.join('；') || '平淡的一天，什么特别的事都没发生'}`);
+  L.push(`他注意到的破绽：${S.clues.slice(-6).map(c => c.t).join('；') || '暂无'}`);
+  L.push(`明天的固定日程：${tomorrow.filter(e => !e.inside || e.at !== '家').map(e => `${fmtClock(e.t)} ${e.at} ${e.act}`).join('；')}`);
+  L.push(`【要求】先写日记，再决定明天在固定日程之外额外去哪里。地点只能从这些里选：${PLACES.join('/')}。stops 写0到2个，时间在07:00到20:30之间，相隔至少两小时（每站连路上大约一个半小时，期间他会翘掉原来的安排），act 写他去那里做什么（12字以内）。怀疑值越高，他越想偏离日常、去码头或大桥看看。escape 表示他是否决定明天离开晴港：怀疑值85以上几乎一定是true，30以下几乎一定是false。`);
+  L.push('【输出格式】只输出两行，每行一个完整的JSON对象，不要代码块，不要任何别的文字：');
+  L.push('{"k":"diary","text":"日记，第一人称，80字以内"}');
+  L.push('{"k":"plan","stops":[{"t":"HH:MM","at":"地点","act":"做什么"}],"intent":"明天的打算，15字以内","escape":布尔值}');
+  L.push('全部用简体中文。');
+  return L.join('\n');
+}
+
+// AI 给的行程不一定守规矩：时间解析失败、地点不在地图上、两站挨太近的都丢掉
+export function sanitizeStops(list) {
+  if (!Array.isArray(list)) return [];
+  const out = [];
+  for (const s of list) {
+    if (!s || typeof s !== 'object') continue;
+    const m = /^(\d{1,2})[:：](\d{2})$/.exec(String(s.t || '').trim());
+    const at = clean(s.at, 6);
+    if (!m || !LOCS[at]) continue;
+    const t = clamp(Number(m[1]) * 60 + Number(m[2]), EARLIEST, LATEST);
+    if (out.some(o => Math.abs(o.t - t) < STOP_MIN + 10)) continue;
+    out.push({ t, at, act: clean(s.act, 14) || `去${at}看看` });
+    if (out.length >= 2) break;
+  }
+  return out.sort((a, b) => a.t - b.t);
+}
+
+export function offlineDiary(S) {
+  const lv = level(S.sus);
+  const intent = pick(INTENTS[lv]);
+  const [at, act] = INTENT_AT[intent] || ['广场', '随便走走'];
+  const t = pick([7 * 60 + 45, 10 * 60 + 30, 12 * 60 + 15, 15 * 60 + 30, 17 * 60 + 40]);
+  const last = S.today.length ? S.today[S.today.length - 1].replace(/^第\d+天[^：]*：/, '') : '';
+  const text = clean(`${last ? `${last}。` : '今天什么都没发生。'}${pick(MINDS[lv])}`, 80);
+  return {
+    diary: { k: 'diary', text },
+    plan: { k: 'plan', stops: [{ t: fmtClock(t), at, act }], intent, escape: lv >= 3 || !!S.escape },
+  };
+}
+
+// ---------- 最终幕 ----------
+export function buildFinalePrompt(words, S) {
+  return ['你是互动游戏《真实人生》的剧情引擎。现在是全剧的最终幕。', BIBLE,
+    `【当前状态】第${S.day}天 ${S.clock}。林楚的怀疑值 ${S.sus}/100。`,
+    `他之前注意到的破绽：${S.clues.slice(-6).map(c => c.t).join('；') || '暂无'}`,
+    `最近发生的事：${S.memos.slice(-4).join('；') || '无'}`,
+    '【最终幕】林楚走过了整座大桥，来到晴港的尽头：桥的尽头是一面画着蓝天白云的墙，墙上有一扇写着"出口"的小门。全世界的观众都屏住了呼吸。',
+    `导演第一次用天空中的声音对他说话：${words ? `「${words}」` : '（导演选择了沉默，一句话也没说）'}`,
+    '写这场最终的戏，3到6个镜头。不要重复导演的原话，从林楚的反应开始写。然后决定他是否留下：只有导演的话真诚、尊重他、真正打动了他，他才可能留下；大多数情况下他会离开。',
+    '【输出格式】只输出若干行，每行一个完整的JSON对象，不要代码块，不要任何别的文字：',
+    '3到6行：{"k":"beat","who":"林楚、导演或旁白","say":"台词，没有就填空字符串","act":"动作或画面，没有就填空字符串"}',
+    '最后1行：{"k":"end","stay":布尔值,"last":"林楚在门前说的最后一句话，30字以内","danmu":["4到6条观众弹幕"]}',
+    '每条台词和动作都不超过40个字。全部用简体中文。'].join('\n');
+}
+
+export async function offlineFinale(words, onObj) {
+  const beats = [
+    { k: 'beat', who: '旁白', say: '', act: '林楚伸手摸了摸天空。是一面墙，凉的。' },
+    { k: 'beat', who: '林楚', say: words ? '你说的话，我听见了。' : '……连一句解释都没有吗？', act: '他抬头看着天' },
+    { k: 'beat', who: '林楚', say: '这三十三年，谢谢你们陪着我。', act: '他对着天空鞠了一躬' },
+  ];
+  for (const b of beats) { onObj(b); await wait(60); }
+  onObj({ k: 'end', stay: false, last: '外面要是没有观众，我也想去看看。', danmu: ['走吧！', '我哭了', '导演输了', '再见了林楚'] });
 }
