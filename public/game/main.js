@@ -86,7 +86,7 @@ function updateLabels(dt) {
   for (const a of sim.agents) {
     const t = tagFor(a);
     if (!t) continue;
-    if (a.inside) { t.hidden = true; if (a === sim.truman) labels.truman = null; continue; }
+    if (a.inside || a.gone) { t.hidden = true; if (a === sim.truman) labels.truman = null; continue; }
     const p = world.project(a.x, a.y + 2.75, a.z);
     const hidden = place(t, p);
     if (a === sim.truman) {
@@ -105,7 +105,7 @@ function updateLabels(dt) {
   for (let i = bubbles.length - 1; i >= 0; i--) {
     const b = bubbles[i];
     b.life -= dt;
-    if (b.life <= 0 || b.agent.inside) { b.node.remove(); bubbles.splice(i, 1); continue; }
+    if (b.life <= 0 || b.agent.inside || b.agent.gone) { b.node.remove(); bubbles.splice(i, 1); continue; }
     place(b.node, world.project(b.agent.x, b.agent.y + 2.75, b.agent.z), -26);
   }
 }
@@ -159,8 +159,8 @@ addEventListener('keydown', (e) => {
   if (e.key === 'q' || e.key === 'Q') world.rotate(-1);
   else if (e.key === 'e' || e.key === 'E') world.rotate(1);
   else if (e.key === 'f' || e.key === 'F') { world.setFollow(true); syncCamButtons(); }
-  else if (e.key === ' ' && !director.busy && !ui.popOpen) { e.preventDefault(); ui.setSpeed(sim.speed === 0 ? 1 : 0); }
-  else if (['1', '2', '3'].includes(e.key) && !director.busy && !ui.popOpen) ui.setSpeed([1, 2, 4][Number(e.key) - 1]);
+  else if (e.key === ' ' && !director.locked && !ui.popOpen) { e.preventDefault(); ui.setSpeed(sim.speed === 0 ? 1 : 0); }
+  else if (['1', '2', '3'].includes(e.key) && !director.locked && !ui.popOpen) ui.setSpeed([1, 2, 4][Number(e.key) - 1]);
 });
 new ResizeObserver(() => world.resize()).observe(canvas);
 

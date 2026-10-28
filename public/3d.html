@@ -210,6 +210,33 @@ button,input,select{font:inherit;color:inherit}
 .pop-sponsor input{accent-color:var(--sky);margin:3px 0 0}
 .pop-btns{display:flex;justify-content:flex-end;gap:10px}
 
+/* 最终幕 */
+.finale{position:absolute;z-index:6;left:50%;transform:translateX(-50%);bottom:calc(var(--gut-b) + 8px);width:min(520px,calc(100% - 2 * var(--gut-l)));padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.finale p{margin:0}
+.finale .rec{color:var(--tally)}
+.finale label{color:var(--muted)}
+.finale textarea{width:100%;resize:none;background:var(--panel-2);border:0;padding:5px 8px;box-shadow:0 0 0 2px var(--edge);outline:none;font:inherit;color:inherit}
+.finale textarea:focus{box-shadow:0 0 0 2px var(--sky)}
+.finale .btns,.endbar{display:flex;justify-content:flex-end;gap:10px;align-items:center}
+.endbar{position:absolute;z-index:6;left:50%;transform:translateX(-50%);bottom:calc(var(--gut-b) + 8px);padding:8px 12px;max-width:calc(100% - 2 * var(--gut-l))}
+.endbar span{margin-right:auto}
+.finale-on .hand,.ended-on .hand,.finale-on .help,.ended-on .help{display:none}
+
+/* 结局弹窗：牛皮纸卡片 + 像素边框 */
+.overlay{position:absolute;inset:0;z-index:50;display:grid;place-items:center;padding:var(--gut-t) var(--gut-r) var(--gut-b) var(--gut-l);background:rgba(8,12,20,.78)}
+.end-card{width:min(460px,100%);max-height:100%;overflow:auto;background:var(--paper);color:var(--paper-ink);padding:18px 20px;display:flex;flex-direction:column;gap:10px;box-shadow:4px 0 0 0 #2b2620,-4px 0 0 0 #2b2620,0 4px 0 0 #2b2620,0 -4px 0 0 #2b2620,0 12px 0 4px rgba(0,0,0,.35)}
+.end-card .eyebrow{color:var(--paper-muted);letter-spacing:.1em}
+.end-head{display:flex;align-items:center;gap:12px}
+.end-card h2{margin:0;font-weight:400;font-size:24px;line-height:24px}
+.rank{font-size:24px;line-height:24px;padding:4px 8px;background:var(--tally);color:#fff}
+.end-card p{margin:0}
+.end-card dl{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin:0;padding-top:10px;border-top:2px dashed rgba(43,38,32,.3)}
+.end-card dt{color:var(--paper-muted)}
+.end-card dd{margin:0}
+.end-card .btns{display:flex;justify-content:flex-end;gap:10px;margin-top:4px}
+.end-card .pbtn{background:var(--paper);color:var(--paper-ink);box-shadow:2px 0 0 0 #2b2620,-2px 0 0 0 #2b2620,0 2px 0 0 #2b2620,0 -2px 0 0 #2b2620}
+.end-card .pbtn.primary{background:#2b2620;color:var(--paper)}
+
 .loading{position:absolute;inset:0;z-index:40;display:grid;place-items:center;background:var(--bg);color:var(--sky);font-size:24px;line-height:24px;text-align:center;padding:0 24px}
 
 @media (max-width:760px){
@@ -229,6 +256,8 @@ button,input,select{font:inherit;color:inherit}
   .card{width:84px;height:120px;padding:6px;transform:translateY(60px) rotate(var(--r))}
   .card .d,.card .meta{display:none}
   .toast{bottom:140px}
+  .end-card dl{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .finale-on .crt,.ended-on .crt{display:none}
   .pop{left:var(--gut-l)!important;right:var(--gut-r);width:auto;top:auto!important;bottom:calc(var(--gut-b) + 8px)}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.danmu{display:none}}
@@ -345,6 +374,33 @@ button,input,select{font:inherit;color:inherit}
 
   <p class="toast" id="toast" hidden role="status"></p>
   <div class="pop px" id="pop" role="dialog" aria-label="安排这场戏" hidden></div>
+
+  <div class="finale px" id="finale" hidden role="group" aria-labelledby="finale-title">
+    <p id="finale-title"><span class="rec">● 最终幕</span> 林楚站在穹顶的出口门前。全世界都在看。</p>
+    <label for="finale-words">这是你第一次直接对他说话。你想说什么？</label>
+    <textarea id="finale-words" rows="3" maxlength="200" placeholder="例：外面的世界没有比这里更真实的东西。留下来吧，我比任何人都了解你。"></textarea>
+    <div class="btns">
+      <button class="pbtn" id="finale-silent" type="button">保持沉默</button>
+      <button class="pbtn primary" id="finale-go" type="button">对他说话</button>
+    </div>
+  </div>
+  <div class="endbar px" id="endbar" hidden>
+    <span id="endbar-t"></span>
+    <button class="pbtn" id="endbar-show" type="button">看结局</button>
+    <button class="pbtn primary" id="endbar-restart" type="button">重新开播</button>
+  </div>
+  <div class="overlay" id="overlay" hidden>
+    <div class="end-card" role="dialog" aria-modal="true" aria-labelledby="end-title">
+      <span class="eyebrow" id="end-eyebrow"></span>
+      <div class="end-head"><span class="rank" id="end-rank" hidden></span><h2 id="end-title"></h2></div>
+      <p id="end-text"></p>
+      <dl id="end-stats"></dl>
+      <div class="btns">
+        <button class="pbtn" id="end-log" type="button">看看场记</button>
+        <button class="pbtn primary" id="end-restart" type="button">重新开播</button>
+      </div>
+    </div>
+  </div>
 
   <div class="loading" id="loading">搭建摄影棚…</div>
 </div>

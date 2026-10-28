@@ -1,6 +1,6 @@
 // 导演的操作界面：手牌拖放 / 点选、放置小窗、待拍名牌、右侧抽屉（林楚 / 场记 / 破绽）、
 // 顶部数值、拍摄提示条、弹幕和提示。3D 名牌和对话气泡在 main.js 里，这里通过 labels 读它们的位置。
-import { CARD, CAT, CAST, ROSTER, SPONSOR_PAY, sponsorOf, MINDS } from './data.js';
+import { CARD, CAT, CAST, ROSTER, SPONSOR_PAY, sponsorOf, MINDS, ENDINGS } from './data.js';
 import { fmtClock, periodOf } from './engine.js';
 import { ai, level } from './story.js';
 
@@ -8,6 +8,7 @@ const $ = (s) => document.querySelector(s);
 const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const colorOf = (who) => (CAST[who] && CAST[who].color) || '#c9d2e3';
 const SNAP = 70;
+const rankOf = avg => (avg >= 1000 ? 'S' : avg >= 900 ? 'A' : avg >= 780 ? 'B' : 'C');
 
 export class UI {
   constructor({ sim, world, director, labels, addBubble }) {
@@ -37,7 +38,24 @@ export class UI {
   // ---------- 绑定一次性的控件 ----------
   bind() {
     const { sim, director } = this;
-    document.querySelectorAll('[data-speed]').forEach(b => b.addEventListener('click', () => { if (!director.busy) this.setSpeed(Number(b.dataset.speed)); }));
+    document.querySelectorAll('[data-speed]').forEach(b => b.addEventListener('click', () => { if (!director.locked) this.setSpeed(Number(b.dataset.speed)); }));
+    $('#finale-go').addEventListener('click', () => {
+      const w = $('#finale-words').value.trim();
+      if (!w) { this.toast('先写点什么；不想说话就点“保持沉默”。', true); $('#finale-words').focus(); return; }
+      director.runFinale(w);
+    });
+    $('#finale-silent').addEventListener('click', () => director.runFinale(''));
+    $('#end-restart').addEventListener('click', () => director.reset());
+    $('#endbar-restart').addEventListener('click', () => director.reset());
+    $('#end-log').addEventListener('click', () => {
+      director.D.ended.hidden = true;
+      director.save();
+      $('#drawer').classList.add('open');
+      $('#drawer-tab').setAttribute('aria-expanded', 'true');
+      this.showTab('log');
+      this.hudT = 0;
+    });
+    $('#endbar-show').addEventListener('click', () => { delete director.D.ended.hidden; director.save(); this.hudT = 0; });
     $('#crew').addEventListener('change', (e) => { director.D.crew = e.target.value; director.save(); this.hudT = 0; });
     $('#skip').addEventListener('click', () => director.fastForward());
     $('#cut').addEventListener('click', () => director.cut());
@@ -361,7 +379,7 @@ export class UI {
     $('#clock-day').textContent = `第 ${sim.day} 天`;
     $('#clock-time').textContent = fmtClock(sim.min);
     const per = $('#clock-period');
-    per.textContent = director.busy ? '拍摄中' : sim.gated || director.diaryBusy ? '写日记' : sim.nightFF ? '夜间快进' : sim.speed === 0 ? '暂停' : periodOf(sim.min);
+    per.textContent = D.ended ? '已收播' : D.finale && !director.busy ? '最终幕' : director.busy ? '拍摄中' : sim.gated || director.diaryBusy ? '写日记' : sim.nightFF ? '夜间快进' : sim.speed === 0 ? '暂停' : periodOf(sim.min);
     per.classList.toggle('ff', sim.nightFF || !!director.diaryBusy);
     $('#showday').textContent = `直播第 ${(12409 + sim.day).toLocaleString('zh-CN')} 天`;
 
@@ -385,25 +403,34 @@ export class UI {
           : !ai.ok ? '没连上 DeepSeek，先用排练剧本'
             : `DeepSeek 在线 · ${D.crew === 'default' ? ai.models.default : ai.models.quick}`;
 
-    document.querySelectorAll('[data-speed]').forEach(b => { b.disabled = director.busy; });
+    document.querySelectorAll('[data-speed]').forEach(b => { b.disabled = director.locked; });
+    const game = document.getElementById('game');
+    game.classList.toggle('finale-on', D.finale && !D.ended);
+    game.classList.toggle('ended-on', !!D.ended);
+    const fin = $('#finale');
+    const showFin = D.finale && !D.ended && !director.busy;
+    if (fin.hidden === showFin) { fin.hidden = !showFin; if (showFin && innerWidth >= 760) $('#finale-words').focus(); }
+    $('#endbar').hidden = !D.ended || !D.ended.hidden;
+    if (D.ended) $('#endbar-t').textContent = `本季已结束：${ENDINGS[D.ended.type].title}`;
+    this.renderOverlay();
     $('#cut').hidden = !director.inFlight;
     $('#skip').hidden = !director.busy || director.inFlight;
 
     const esc = $('#alert-esc');
     const run = !!D.escape;
-    esc.hidden = !D.pendingEscape && !run;
+    esc.hidden = (!D.pendingEscape && !run) || D.finale || !!D.ended;
     esc.classList.toggle('run', run);
     if (run) esc.textContent = `林楚正在逃离！他${T.override && T.override.at === '出口' ? '已经过了大桥，正走向出口' : T.override && T.override.at === '码头' ? '正去码头找船' : '正朝大桥跑去'}。往大桥或码头放阻拦卡拦住他。`;
     else if (D.pendingEscape) esc.textContent = `警报：林楚打算离开晴港（${D.intent}）。日程一有空档他就会动身；下一场不出阻拦卡，怀疑值额外 +15。`;
 
     // 林楚面板
-    $('#t-place').textContent = T.path.length ? '路上' : /^h\d/.test(T.place) ? '别人家' : T.place;
-    $('#t-act').textContent = director.busy ? '拍戏中' : T.act || '—';
+    $('#t-place').textContent = T.gone ? '穹顶外面' : T.path.length ? '路上' : /^h\d/.test(T.place) ? '别人家' : T.place;
+    $('#t-act').textContent = T.gone ? '已经离开了晴港' : director.busy ? '拍戏中' : T.act || '—';
     const plan = sim.planFor(sim.day);
     let idx = 0;
     plan.forEach((e, k) => { if (sim.min >= e.t) idx = k; });
     const next = plan[idx + 1];
-    $('#t-next').textContent = next ? `${fmtClock(next.t)} ${next.at} · ${next.act}` : '明天 06:40 起床';
+    $('#t-next').textContent = D.finale || D.ended ? '—' : next ? `${fmtClock(next.t)} ${next.at} · ${next.act}` : '明天 06:40 起床';
     $('#t-intent').textContent = D.intent || '暂时没什么打算';
     const mind = D.minds[0];
     $('#t-mind-d').textContent = mind ? mind.d : '';
@@ -431,6 +458,39 @@ export class UI {
     if (logKey !== this.logKey) { this.logKey = logKey; this.renderLog(); this.renderClues(); }
     const handKey = `${D.hand.join(',')}:${D.budget}:${this.armed}`;
     if (handKey !== this.handKey) { this.handKey = handKey; this.renderHand(); }
+  }
+
+  // ---------- 结局弹窗 ----------
+  renderOverlay() {
+    const D = this.director.D, E = D.ended;
+    const ov = $('#overlay');
+    const key = E && !E.hidden ? `${E.type}:${E.day}` : '';
+    if (key === this.overlayKey) return;
+    this.overlayKey = key;
+    if (!key) { ov.hidden = true; return; }
+    let text;
+    if (E.type === 'leave') text = `林楚最后说：“${E.last}”然后他对着天空鞠了一躬，推开门，走进了门外的光里。全世界的观众愣了几秒，然后有人开始换台。`;
+    else if (E.type === 'stay') text = `“${E.last}”门在他面前慢慢关上。第二天早上，晴港照常天晴。节目还在继续。`;
+    else if (E.type === 'cancel') text = '收视连续三小时低于 600 万，电视台撤下了《真实人生》。第二天早上，林楚推开家门，发现整条街空无一人。他犹豫了一下，朝大桥走去。';
+    else {
+      const r = rankOf(E.avg);
+      const lines = { S: '林楚什么都没发现，观众却离不开他了。电视台当场给你续约三季。', A: '一季好戏。林楚还在晴港，观众还在追，赞助商排着队。', B: '平稳的一季。林楚偶尔会盯着天空发呆，但他还在。', C: '平平无奇的一季。他没发现，观众也没怎么看。' };
+      text = `平均收视 ${E.avg.toLocaleString('zh-CN')} 万，评级 ${r}。${lines[r]}`;
+    }
+    $('#end-eyebrow').textContent = `本季结局 · 第 ${E.day} 天`;
+    $('#end-title').textContent = ENDINGS[E.type].title;
+    $('#end-rank').hidden = E.type !== 'season';
+    $('#end-rank').textContent = E.type === 'season' ? rankOf(E.avg) : '';
+    $('#end-text').textContent = text;
+    const dl = $('#end-stats');
+    dl.replaceChildren();
+    for (const [k, v] of [['播出', `${E.day} 天`], ['拍了', `${D.take} 场`], ['平均收视', `${E.avg.toLocaleString('zh-CN')} 万`], ['最终怀疑', this.sim.sus], ['破绽', `${D.clues.length} 条`]]) {
+      const d = el('div');
+      d.append(el('dt', '', k), el('dd', '', String(v)));
+      dl.append(d);
+    }
+    ov.hidden = false;
+    $('#end-restart').focus();
   }
 
   spark(h) {

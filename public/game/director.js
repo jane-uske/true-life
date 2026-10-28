@@ -1,7 +1,7 @@
 // 导演层：收视、经费、手牌、待拍的戏、拍摄流程和结算。规则大多沿用 v0.1 的 applyEnd / advance。
-import { CARD, DECK, CAST, LOCS, SPONSOR_PAY, sponsorOf, trumanPlan } from './data.js';
+import { CARD, DECK, CAST, LOCS, SPONSOR_PAY, sponsorOf, trumanPlan, ENDINGS, SEASON_DAYS, LOW_RATING } from './data.js';
 import { fmtClock, clamp, pick } from './engine.js';
-import { buildPrompt, callAI, offlineScene, offlineEnd, offlineMind, ERR, PERMANENT_WHY, ai, aiReady, clean, buildDiaryPrompt, sanitizeStops, offlineDiary } from './story.js';
+import { buildPrompt, callAI, offlineScene, offlineEnd, offlineMind, ERR, PERMANENT_WHY, ai, aiReady, clean, buildDiaryPrompt, sanitizeStops, offlineDiary, buildFinalePrompt, offlineFinale } from './story.js';
 
 const SAVE_KEY = 'truelife.3d.v2';
 const wait = ms => new Promise(r => setTimeout(r, ms));
@@ -21,6 +21,7 @@ function fresh(crew = 'quick') {
     flags: { yu: false, dad: false }, used: [], pendingEscape: false, take: 0, crew,
     extraStops: {}, diaries: [], diaryDay: 0,
     escape: null, escapeRest: 0, finale: false, ended: null,
+    lowHours: 0, seasonSum: 0, seasonN: 0,
     log: [
       { k: 'day', text: '第 1 天' },
       { k: 'sys', text: '把手牌拖到小镇的地点上，林楚走到那里就会开拍；拖到林楚身上，马上开拍。' },
@@ -47,6 +48,9 @@ export class Director {
     if (D.flags.dad) sim.spawnGuest('林父');
     sim.snapToPlans();
     if (D.escape) sim.truman.speed = ESCAPE_SPEED;
+    if (D.finale) this.standAtExit();
+    if (D.ended) sim.speed = 0;
+    if (D.ended && D.ended.type === 'leave') { sim.truman.gone = true; world.openDoor(true); }
     world.syncPeople();
     for (const p of D.pending) if (p.target !== '林楚') world.addMarker(p.id, p.target);
   }
@@ -79,6 +83,9 @@ export class Director {
     if (this.D.hist.length > 30) this.D.hist.shift();
   }
 
+  // 拍戏、最终幕、结局时不能调速度、不能放卡
+  get locked() { return this.busy || this.D.finale || !!this.D.ended; }
+
   mode() {
     if (this.D.crew === 'offline' || ai.blocked || !ai.ok) return 'offline';
     return this.D.crew === 'default' ? 'default' : 'quick';
@@ -103,7 +110,7 @@ export class Director {
 
   place(cardId, target, opts = {}) {
     const D = this.D, c = CARD[cardId];
-    if (!c || !D.hand.includes(cardId) || !c.where.includes(target)) return false;
+    if (!c || D.finale || D.ended || !D.hand.includes(cardId) || !c.where.includes(target)) return false;
     if (c.cost > D.budget) { this.hooks.toast('经费不够了。', true); return false; }
     const actor = c.lock ? c.actor : (opts.actor && this.actorAvailable(opts.actor) ? opts.actor : null);
     const p = { id: D.seq++, card: cardId, target, actor, whisper: clean(opts.whisper, 80), sponsor: !!opts.sponsor, day: this.sim.day };
@@ -148,7 +155,7 @@ export class Director {
   }
 
   checkTriggers() {
-    if (this.busy) return;
+    if (this.busy || this.D.finale || this.D.ended) return;
     const T = this.sim.truman;
     const p = this.D.pending.find(x => x.target === '林楚' || (!T.path.length && x.target === T.place));
     if (p) this.runScene(p);
@@ -382,15 +389,133 @@ export class Director {
   }
 
   enterFinale() {
-    const sim = this.sim, T = sim.truman, D = this.D;
+    const D = this.D;
     D.escape = null;
     D.finale = true;
-    T.speed = 3.6;
+    this.standAtExit();
+    this.pushLog({ k: 'sys', text: '林楚走到了大桥的尽头。天空原来是一面墙，墙上有一扇门。' });
+    this.save();
+    this.hooks.toast('最终幕：林楚站在出口门前。你可以对他说一段话，也可以保持沉默。');
+    this.hooks.changed();
+  }
+
+  // 林楚面朝出口门站定，时间停住，镜头转过去
+  standAtExit() {
+    const sim = this.sim, T = sim.truman, n = sim.nav.nodes.get('出口');
+    Object.assign(T, { x: n.x, y: n.y, z: n.z, node: '出口', goal: '出口', place: '出口', path: [], edge: null, inside: false, walking: false, pause: 0, speed: 3.6, act: '站在门前' });
     T.override = { at: '出口', act: '站在门前', until: Infinity };
     T.hold = true;
-    T.heading = Math.atan2(Math.cos(225 * Math.PI / 180), Math.sin(225 * Math.PI / 180));
+    T.heading = Math.atan2(Math.cos(LOCS.大桥.a * Math.PI / 180), Math.sin(LOCS.大桥.a * Math.PI / 180));
     sim.speed = 0;
-    this.pushLog({ k: 'sys', text: '林楚走到了大桥的尽头。天空原来是一面墙，墙上有一扇门。' });
+    this.world.focusExit();
+  }
+
+  // ---------- 最终幕 ----------
+  async runFinale(words) {
+    const sim = this.sim, T = sim.truman, D = this.D;
+    if (this.busy || !D.finale || D.ended) return;
+    this.busy = true;
+    this.skip = false;
+    words = clean(words, 200);
+    const before = D.log.length;
+    this.pushLog({ k: 'take', n: D.take + 1, day: sim.day, time: fmtClock(sim.min), place: '世界尽头', title: '最终幕' });
+    if (words) this.pushLog({ k: 'beat', who: '导演', say: words, act: '声音从天空传来' });
+    else this.pushLog({ k: 'beat', who: '旁白', say: '', act: '天空一片寂静。导演什么也没说。' });
+    this.hooks.shooting(true, { n: D.take + 1, place: '世界尽头', title: '最终幕' });
+    this.hooks.caption(words ? `导演（声音从天空传来）：${words}` : '天空一片寂静。导演什么也没说。');
+    this.world.focusExit();
+    this.hooks.changed();
+    await aiReady;
+
+    const tok = ++this.tok;
+    let chain = wait(2200);
+    const q = fn => { chain = chain.then(() => (tok === this.tok ? fn() : undefined)); };
+    const got = { beats: 0, end: null };
+    const onObj = (o) => {
+      if (!o || typeof o !== 'object') return;
+      if (o.k === 'beat' && got.beats < 8) { got.beats++; q(() => this.playBeat(o, () => null)); }
+      else if (o.k === 'end') got.end = o;
+    };
+    const mode = this.mode();
+    try {
+      if (mode === 'offline') await offlineFinale(words, onObj);
+      else {
+        this.ctl = new AbortController();
+        this.inFlight = true;
+        this.hooks.changed();
+        await callAI(buildFinalePrompt(words, this.snapshot()), mode, this.ctl.signal, onObj);
+      }
+    } catch (e) {
+      const code = (e && e.code) || 'upstream_error';
+      if (PERMANENT_WHY[code]) {
+        ai.blocked = PERMANENT_WHY[code];
+        this.pushLog({ k: 'sys', text: `${ai.blocked}。最终幕改用排练剧本。` });
+        if (!got.beats) await offlineFinale(words, onObj);
+      } else if (!got.beats) {
+        // 这一幕不算：回滚场记，让导演重新说
+        this.tok++;
+        D.log.length = before;
+        this.inFlight = false;
+        this.ctl = null;
+        this.busy = false;
+        this.hooks.caption('');
+        this.hooks.shooting(false);
+        this.hooks.toast(ERR[code] || ERR.upstream_error, true);
+        this.hooks.changed();
+        return;
+      }
+    }
+    this.inFlight = false;
+    this.ctl = null;
+    this.hooks.changed();
+    await chain;
+
+    const e = got.end || { stay: false };
+    const stay = e.stay === true || e.stay === 'true';
+    const last = clean(e.last, 60) || (stay ? '……我再想想。' : '外面要是没有观众，我也想去看看。');
+    D.take++;
+    const dm = Array.isArray(e.danmu) ? e.danmu.map(x => clean(x, 24)).filter(Boolean).slice(0, 6) : [];
+    this.hooks.danmu(dm.length ? dm : ['我哭了', '走吧！', '导演输了']);
+    this.pushLog({ k: 'beat', who: '林楚', say: last, act: stay ? '他在门前站了很久，转身往回走' : '他推开了门' });
+    this.hooks.say(T, last, 4, false);
+    this.hooks.caption(stay ? '他在门前站了很久，转身往回走。' : '他推开了门。');
+    await wait(this.skip ? 300 : 2400);
+    if (!stay) {
+      // 推门，走进门外的光里
+      this.world.openDoor();
+      await wait(this.skip ? 200 : 900);
+      T.hold = false;
+      T.override = { at: '门外', act: '走出门外', until: Infinity };
+      T.speed = 2.4;
+      sim.speed = 1;
+      const t0 = performance.now();
+      while (!T.gone && performance.now() - t0 < 9000) {
+        if (Math.hypot(T.x, T.z) > 69.4) T.gone = true;
+        await wait(100);
+      }
+      T.gone = true;
+      sim.speed = 0;
+      await wait(this.skip ? 200 : 1600);
+    }
+    this.busy = false;
+    this.hooks.caption('');
+    this.hooks.shooting(false);
+    this.endGame(stay ? 'stay' : 'leave', last);
+  }
+
+  // ---------- 结局 ----------
+  seasonAvg() {
+    const D = this.D;
+    return D.seasonN ? Math.round(D.seasonSum / D.seasonN) : D.ratings;
+  }
+
+  endGame(type, last) {
+    const sim = this.sim, D = this.D;
+    if (D.ended) return;
+    D.ended = { type, last: last || '', day: type === 'season' ? SEASON_DAYS : sim.day, avg: this.seasonAvg() };
+    D.escape = null;
+    sim.speed = 0;
+    this.pushLog({ k: 'sys', text: `—— 本季结束：${ENDINGS[type].title} ——` });
     this.save();
     this.hooks.changed();
   }
@@ -452,11 +577,17 @@ export class Director {
   // ---------- 时间推进 ----------
   onClock(ev) {
     const D = this.D;
+    if (D.finale || D.ended) return;
     if (ev.type === 'hour') {
       D.sinceScene++;
       if (D.sinceScene > 1) D.ratings = Math.max(300, D.ratings - 12);
       this.pushHist(D.ratings);
       D.dayRatings.push(D.ratings);
+      D.seasonSum += D.ratings;
+      D.seasonN++;
+      D.lowHours = D.ratings < LOW_RATING ? D.lowHours + 1 : 0;
+      if (D.lowHours >= 3) { this.endGame('cancel'); return; }
+      if (D.lowHours) this.hooks.toast(`收视低于 ${LOW_RATING} 万，已经连续 ${D.lowHours} 小时。连续 3 小时就会停播。`, true);
       this.save();
     } else if (ev.type === 'period' && ['早上', '下午', '晚上'].includes(ev.name)) {
       if (D.hand.length < 4) {
@@ -466,6 +597,7 @@ export class Director {
     } else if (ev.type === 'day') {
       const avg = D.dayRatings.length ? Math.round(D.dayRatings.reduce((a, b) => a + b, 0) / D.dayRatings.length) : D.ratings;
       D.dayRatings = [];
+      if (ev.day > SEASON_DAYS) { this.endGame('season'); return; }
       const income = clamp(Math.round(40 + (avg - 600) / 6), 20, 160);
       D.budget += income;
       const expired = D.pending.filter(p => p.target !== '林楚');

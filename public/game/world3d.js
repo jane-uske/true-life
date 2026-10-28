@@ -361,7 +361,6 @@ function buildTown(batch, anchors) {
     F.box(0.15, 2.6, 0.15, '#55627a', -2.7, BRIDGE_Y, -len / 2 + 0.8); F.box(1.8, 0.7, 0.12, '#2f5d8a', -2.7, BRIDGE_Y + 2.2, -len / 2 + 0.8);
     const dp = polar(L.a, 69.0); const D = frame(batch, dp.x, dp.z, faceOut(L.a), 0);
     D.box(4.4, 0.4, 2, '#cfd8e3', 0, BRIDGE_Y - 0.4, -0.8);
-    D.box(2.4, 3.6, 0.3, '#151b28', 0, BRIDGE_Y, 0.1, { kind: 'door' });
     D.box(3.0, 0.25, 0.4, '#e8edf7', 0, BRIDGE_Y + 3.6, 0.1); D.box(0.25, 3.6, 0.4, '#e8edf7', -1.35, BRIDGE_Y, 0.1); D.box(0.25, 3.6, 0.4, '#e8edf7', 1.35, BRIDGE_Y, 0.1); }
 
   // 群演住的房子
@@ -506,6 +505,7 @@ export class World {
     this.syncPeople();
     this.markers = new Map();
     this.camOverride = null;
+    this.buildExitDoor();
     this.ring = new THREE.Mesh(new THREE.RingGeometry(0.95, 1.2, 24).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#8fd3ff', transparent: true, opacity: 0.85, depthWrite: false }));
     this.scene.add(this.ring);
     this.buildPost();
@@ -556,6 +556,27 @@ export class World {
       m.position.set(p.x, -1.2, p.z); this.scene.add(m);
     }
   }
+
+  // 出口门单独建：最终幕里要能推开，门后是一片白光
+  buildExitDoor() {
+    const L = LOCS.大桥, p = polar(L.a, 69.0);
+    const g = new THREE.Group();
+    g.position.set(p.x, 0, p.z);
+    g.rotation.y = faceOut(L.a);
+    const light = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 3.6), new THREE.MeshBasicMaterial({ color: '#fff4d6', side: THREE.DoubleSide }));
+    light.position.set(0, BRIDGE_Y + 1.8, 0.02);
+    light.visible = false;
+    const hinge = new THREE.Group();
+    hinge.position.set(-1.2, BRIDGE_Y, 0.1);
+    const leaf = new THREE.Mesh(new THREE.BoxGeometry(2.4, 3.6, 0.3), this.mats.get('#151b28', 'door'));
+    leaf.position.set(1.2, 1.8, 0);
+    leaf.castShadow = true;
+    hinge.add(leaf);
+    g.add(light, hinge);
+    this.scene.add(g);
+    this.door = { hinge, light, open: 0, target: 0 };
+  }
+  openDoor(now = false) { this.door.target = 1; if (now) this.door.open = 1; }
 
   buildPost() {
     const quad = new THREE.PlaneGeometry(2, 2);
@@ -629,6 +650,15 @@ export class World {
   }
   markerPos(id) { const g = this.markers.get(id); return g ? g.position : null; }
 
+  // 最终幕：镜头转到能同时看见林楚背影和出口门的角度
+  focusExit() {
+    const v = this.view, p = polar(LOCS.大桥.a, 64);
+    v.follow = false;
+    v.focus = new V3(p.x, 0, p.z);
+    v.zoomT = 3.2;
+    v.azT = v.az + ((((60 - v.az) % 360) + 540) % 360) - 180;
+  }
+
   focusScene() { this.setFollow(true); this.view.zoomT = Math.max(this.view.zoomT, 2.8); }
 
   // ----- 镜头 -----
@@ -686,7 +716,7 @@ export class World {
     }
 
     for (const [a, p] of this.people) {
-      p.group.visible = !a.inside;
+      p.group.visible = !a.inside && !a.gone;
       if (!p.group.visible) continue;
       p.group.position.set(a.x, a.y, a.z);
       let dh = a.heading - p.group.rotation.y;
@@ -696,7 +726,11 @@ export class World {
     }
     for (const g of this.markers.values()) g.rotation.y = Math.sin(t * 1.2) * 0.35;
     const T = sim.truman;
-    this.ring.visible = !T.inside;
+    const d = this.door;
+    d.open += (d.target - d.open) * Math.min(1, dt * 1.6);
+    d.hinge.rotation.y = -1.65 * d.open;
+    d.light.visible = d.open > 0.02;
+    this.ring.visible = !T.inside && !T.gone;
     this.ring.position.set(T.x, T.y + 0.04, T.z);
     this.ring.scale.setScalar(1 + Math.sin(t * 4) * 0.08);
 
@@ -785,7 +819,7 @@ export class World {
     r.setClearColor(0x8080ff, 0);
     r.render(this.scene, this.cam);
     this.scene.overrideMaterial = null;
-    this.dome.visible = true; this.ring.visible = !this.sim.truman.inside;
+    this.dome.visible = true; this.ring.visible = !this.sim.truman.inside && !this.sim.truman.gone;
 
     let crt = null;
     if (crtRect && crtRect.w > 10 && crtRect.h > 10) {
